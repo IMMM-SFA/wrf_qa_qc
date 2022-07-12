@@ -17,15 +17,19 @@ wrf_extm = pd.read_csv(wrf_df)
 # merge nldas and wrf
 extm_merge = nldas_df.merge(wrf_df, on='Time', how='left')
 
-WSPD_Min	
-WSPD_Max
-T2_Min
-T2_Max
-PS_Min
-PS_Max
-Q2_Min
-Q2_Max
-GLW_Min
-GLW_Max
-SWDOWN_Min
-SWDOWN_Max
+
+# selecting rows based on condition
+rslt_df = extm_merge.loc[(extm_merge['WSPD_Min'] < ) &
+                         (extm_merge['WSPD_Max'] > ) &
+                        (extm_merge['T2_Min'] < ) &
+                        (extm_merge['T2_Max'] > ) &
+                        (extm_merge['PS_Min'] < ) &
+                        (extm_merge['PS_Max'] > ) &
+                        (extm_merge['Q2_Min'] < ) &
+                        (extm_merge['Q2_Max'] > ) &
+                        (extm_merge['GLW_Min'] < ) &
+                        (extm_merge['GLW_Max'] > ) &
+                        (extm_merge['SWDOWN_Min'] < ) &
+                        (extm_merge['SWDOWN_Max'] > ) &
+                        ]
+
