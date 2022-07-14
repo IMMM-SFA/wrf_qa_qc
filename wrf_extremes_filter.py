@@ -17,7 +17,6 @@ wrf_extm = pd.read_csv(wrf_df)
 # merge nldas and wrf
 extm_merge = nldas_df.merge(wrf_df, on='Time', how='left')
 
-
 # selecting rows based on condition
 rslt_df = extm_merge.loc[(extm_merge['WSPD_Min'] < ) &
                          (extm_merge['WSPD_Max'] > ) &

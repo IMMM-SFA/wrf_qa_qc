@@ -27,6 +27,8 @@ latitude = lat
 longitude = lon
 sun = Sun(lat, lon)
 
+#apply pandas column
+
 # date in your machine's local time zone
 time_zone = datetime.date(2020, 9, 13)
 sun_rise = sun.get_local_sunrise_time(time_zone)
