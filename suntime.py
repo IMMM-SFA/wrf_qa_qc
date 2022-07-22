@@ -4,6 +4,7 @@ import netCDF4
 import os
 import pandas as pd
 
+#UTC time not local time
 # set directory
 data_input_dir = 'C:/Users/mcgr323/projects/wrf'
 #data_input_dir = '/global/cscratch1/sd/mcgrathc'
