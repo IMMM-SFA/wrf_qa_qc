@@ -1,13 +1,12 @@
 import pandas as pd
 import numpy as np
-import xarray as xr
 import timeit
 import os
 from glob import glob
-import salem as sl
+import xarray as xr
 
 # start timer
-#start_time = timeit.default_timer()
+start_time = timeit.default_timer()
 
 # set pandas display options
 pd.set_option("display.expand_frame_repr", False)
@@ -48,7 +47,7 @@ def previous_file(year, month):
 
 # %% function for calculating rolling max and min
 
-def WRFminmax(max_df, min_df, max_roll, min_roll, n):
+def NLDASminmax(max_df, min_df, max_roll, min_roll, n):
     """
     Function for calculating rolling maximum and minimum values for each variable.
 
@@ -93,7 +92,7 @@ def WRFminmax(max_df, min_df, max_roll, min_roll, n):
 
 # %% function for calculating cumulative standard deviation and sample size
 
-def WRFstddev(stddev_df, stddev_roll, sample_size_series, sample_size_roll, n):
+def NLDASstddev(stddev_df, stddev_roll, sample_size_series, sample_size_roll, n):
     """
     Function for calculating pooled standard deviation and rolling sample size values for each variable.
 
@@ -135,7 +134,7 @@ def WRFstddev(stddev_df, stddev_roll, sample_size_series, sample_size_roll, n):
 
 # %% function for aggregating rolling stats on netCDF data
 
-def WRFstats(path, year, month,
+def NLDASstats(path, year, month,
              ds_variables=["TMP","SPFH", "PRES", "UGRD", "VGRD", "DLWRF",
                            "PEVAP", "APCP", "DSWRF"]
              ):
@@ -168,8 +167,8 @@ def WRFstats(path, year, month,
 
     # iterate through each nc file and create dataset
     for file in nc_files:
-        ds_sl = sl.open_dataset(file)  # open netCDF data path and create xarray dataset using salem
-        ds = ds_sl.sel(time=f"{year}-{month}")  # slice data by year and month
+        ds_xr = xr.open_dataset(file)  # open netCDF data path and create xarray dataset using salem
+        ds = ds_xr.sel(time=f"{year}-{month}")  # slice data by year and month
 
 
         # calculate descriptive stats on file using xarray
@@ -182,7 +181,7 @@ def WRFstats(path, year, month,
         # convert stats to pandas for storage
         mean_df = mean.to_pandas().reset_index(drop=True)
         stddev_df = stddev.to_pandas()
-        median_df = median.to_pandas().reset_index(drop=True)
+        #median_df = median.to_pandas().reset_index(drop=True)
         max_df = max.to_pandas()
         min_df = min.to_pandas()
 
@@ -195,13 +194,11 @@ def WRFstats(path, year, month,
         mean_roll = (mean_df + (n * mean_roll)) / (n + 1)
 
         # function for calculating rolling std dev and cumulative sample size
-        stddev_roll, sample_size_roll = WRFstddev(stddev_df, stddev_roll, sample_size_series, sample_size_roll, n)
+        stddev_roll, sample_size_roll = NLDASstddev(stddev_df, stddev_roll, sample_size_series, sample_size_roll, n)
 
         # function for calculating rolling max and min
-        max_roll, min_roll = WRFminmax(max_df, min_df, max_roll, min_roll, n)
+        max_roll, min_roll = NLDASminmax(max_df, min_df, max_roll, min_roll, n)
 
-        # TODO cumulative methods for median
-        median_roll = (median_df + (n * median_roll)) / (n + 1)
 
         n += 1  # iterate counter
 
@@ -229,7 +226,7 @@ path = r"C:\Users\mcgr323\projects\wrf"
 year = "2007"
 month = "01"
 
-WRFstats = WRFstats(path, year, month)
+NLDAS_stats = NLDASstats(path, year, month)
 
-print(WRFstats)
+print(NLDASstats)
 print("\n", "Total Runtime: ", timeit.default_timer() - start_time)  # end timer and print
