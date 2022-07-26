@@ -4,6 +4,8 @@ import timeit
 import os
 from glob import glob
 import xarray as xr
+from dateutil.rrule import rrule, MONTHLY
+from datetime import datetime
 
 # start timer
 start_time = timeit.default_timer()
@@ -16,33 +18,9 @@ pd.set_option("display.expand_frame_repr", False)
 
 def one_month_data(path, year, month):
     # collect all files of a given month and year
-    monthdata = sorted(glob(os.path.join(path, f"NLDAS_FORA0125_H.A*{year}{month}*.002.grb.SUB.nc4")))
-
-    # find the following and preceeding months and year
-    month_minus, year_minus = previous_file(year, month)
-
-    # take the file that preceeds the specified month and add to collected files, return sorted list
-    last_month = sorted(glob(os.path.join(path, f"NLDAS_FORA0125_H.A*{year_minus}{month_minus}*.002.grb.SUB.nc4")))[-1]
-    monthdata.append(last_month)
-    onemonthdata = sorted(monthdata)
+    onemonthdata = sorted(glob(os.path.join(path, f"NLDAS_FORA0125_H.A*{year}{month}*.002.grb.SUB.nc4")))
 
     return onemonthdata
-
-
-# function to find the previous file containing parts of the given month
-def previous_file(year, month):
-    months_list = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"]
-    idx = months_list.index(month)
-
-    month_minus = months_list[idx - 1]
-
-    # if month is January, return previous year, else current year
-    if month == "01":
-        year_minus = str(int(year) - 1)
-    else:
-        year_minus = year
-
-    return month_minus, year_minus
 
 
 # %% function for calculating rolling max and min
@@ -135,9 +113,9 @@ def NLDASstddev(stddev_df, stddev_roll, sample_size_series, sample_size_roll, n)
 # %% function for aggregating rolling stats on netCDF data
 
 def NLDASstats(path, year, month,
-             ds_variables=["TMP","SPFH", "PRES", "UGRD", "VGRD", "DLWRF",
-                           "PEVAP", "APCP", "DSWRF"]
-             ):
+               ds_variables=["TMP", "SPFH", "PRES", "UGRD", "VGRD", "DLWRF",
+                             "PEVAP", "APCP", "DSWRF"]
+               ):
     """
     Function for running moving (rolling) descriptive statistics on all netCDF files at a given location.
 
@@ -161,7 +139,6 @@ def NLDASstats(path, year, month,
     sample_size_roll = None
     mean_roll = 0
     stddev_roll = None
-    median_roll = 0
     max_roll = None
     min_roll = None
 
@@ -170,18 +147,15 @@ def NLDASstats(path, year, month,
         ds_xr = xr.open_dataset(file)  # open netCDF data path and create xarray dataset using salem
         ds = ds_xr.sel(time=f"{year}-{month}")  # slice data by year and month
 
-
         # calculate descriptive stats on file using xarray
         mean = ds[ds_variables].mean()
         stddev = ds[ds_variables].std()
-        median = ds[ds_variables].median()
         max = ds[ds_variables].max()
         min = ds[ds_variables].min()
 
         # convert stats to pandas for storage
         mean_df = mean.to_pandas().reset_index(drop=True)
         stddev_df = stddev.to_pandas()
-        #median_df = median.to_pandas().reset_index(drop=True)
         max_df = max.to_pandas()
         min_df = min.to_pandas()
 
@@ -199,7 +173,6 @@ def NLDASstats(path, year, month,
         # function for calculating rolling max and min
         max_roll, min_roll = NLDASminmax(max_df, min_df, max_roll, min_roll, n)
 
-
         n += 1  # iterate counter
 
         print("Run: ", n)  # just to make sure it's still working...
@@ -207,10 +180,10 @@ def NLDASstats(path, year, month,
 
     # create dictionary of stats and convert to DataFrame
     stats = {
+        "Time": f"{year}-{month}",
         "Variable": ds_variables,
         "Mean": mean_roll,
         "Standard Dev.": stddev_roll,
-        "Median": median_roll,
         "Maximum": max_roll,
         "Minimum": min_roll
     }
@@ -220,13 +193,59 @@ def NLDASstats(path, year, month,
     return stats_df
 
 
-# %% run code
+def months(start_m, start_yr, end_m, end_yr):
+    """
+      Function for running moving (rolling) descriptive statistics on all netCDF files at a given location.
 
-path = r"C:\Users\mcgr323\projects\wrf"
-year = "2007"
-month = "01"
+      Parameters
+      ----------
+      start_m : int
+          Month to start analysis
+      start_yr : int
+          Year to start analysis.
+      end_m : int
+          Month to end analysis
+      end_yr : int
+          Year to end analysis.
+      Returns
+      -------
+      stats_df : DataFrame
+          Vector of year-month iterations
 
-NLDAS_stats = NLDASstats(path, year, month)
+      """
+
+    start = datetime(start_yr, start_m, 1)
+    end = datetime(end_yr, end_m, 1)
+    return [f"{d.year}-{d.month}" for d in rrule(MONTHLY, dtstart=start, until=end)]
+
+
+def stats_by_month(path, start_m, start_yr, end_m, end_yr):
+    """
+    Function for running moving (rolling) descriptive statistics on all netCDF files at a given location.
+
+    Parameters
+    ----------
+    path : Str
+        Path to netCDF files for analysis.
+     start_m : int
+          Month to start analysis
+     start_yr : int
+          Year to start analysis.
+     end_m : int
+          Month to end analysis
+     end_yr : int
+          Year to end analysis.
+    Returns
+    -------
+    stats_df : DataFrame
+        Pandas DataFrame for storage of stats.
+
+
+    """
+    month_itr = months(start_m, start_yr, end_m, end_yr)
+
+    NLDAS_stats = NLDASstats(path, month_itr[1])
+
 
 print(NLDASstats)
 print("\n", "Total Runtime: ", timeit.default_timer() - start_time)  # end timer and print
