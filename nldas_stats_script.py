@@ -243,9 +243,19 @@ def stats_by_month(path, start_m, start_yr, end_m, end_yr):
 
     """
     month_itr = months(start_m, start_yr, end_m, end_yr)
+    year = month_itr[1][0]
+    month = month_itr[1][1]
 
-    NLDAS_stats = NLDASstats(path, month_itr[1])
+    NLDAS_stats = NLDASstats(path, year, month)
 
+    return NLDAS_stats
 
+path = 'C:\\Users\\mcgr323\\projects\\wrf'
+start_m = 12
+start_yr = 2006
+end_m = 2
+end_yr = 2007
+
+stats_by_month(path, start_m, start_yr, end_m, end_yr)
 print(NLDASstats)
 print("\n", "Total Runtime: ", timeit.default_timer() - start_time)  # end timer and print
