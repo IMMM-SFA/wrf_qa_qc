@@ -216,7 +216,7 @@ def months(start_m, start_yr, end_m, end_yr):
 
     start = datetime(start_yr, start_m, 1)
     end = datetime(end_yr, end_m, 1)
-    return [f"{d.year}-{d.month}" for d in rrule(MONTHLY, dtstart=start, until=end)]
+    return [(d.month, d.year) for d in rrule(MONTHLY, dtstart=start, until=end)]
 
 
 def stats_by_month(path, start_m, start_yr, end_m, end_yr):
@@ -243,12 +243,56 @@ def stats_by_month(path, start_m, start_yr, end_m, end_yr):
 
     """
     month_itr = months(start_m, start_yr, end_m, end_yr)
-    year = month_itr[1][0]
-    month = month_itr[1][1]
 
-    NLDAS_stats = NLDASstats(path, year, month)
+    appended_data = []
+    for i in range(1, len(month_itr)):
+        year = str(month_itr[i][1])
+        month = str(month_itr[i][0]).zfill(2)
+        NLDAS_stats = NLDASstats(path, year, month)
+        appended_data.append(NLDAS_stats)
 
-    return NLDAS_stats
+
+# see pd.concat documentation for more info
+appended_data = pd.concat(appended_data)
+# write DataFrame to an excel sheet
+csv_monthly_filename = os.path.join(path, 'NLDAS_Monthly_Min_Max_Values_' + str(start_m).zfill(2) + "_" + str(start_yr)
+                                    + '_UTC_to_' + str(end_m).zfill(2) + "_" + str(end_yr) + '_UTC.csv')
+appended_data.to_csv(csv_monthly_filename, sep=',', index=False)
+
+
+def stats_by_year(path, year):
+    """
+    Function for running moving (rolling) descriptive statistics on all netCDF files at a given location.
+
+    Parameters
+    ----------
+    path : Str
+        Path to netCDF files for analysis.
+     year : int
+          Year to run analysis
+    Returns
+    -------
+    stats_df : DataFrame
+        Pandas DataFrame for storage of stats.
+
+
+    """
+    month_list = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
+
+    appended_data = []
+    for i in range(1, len(month_list)):
+        year = str(year)
+        month = str(month_list[i]).zfill(2)
+        NLDAS_stats = NLDASstats(path, year, month)
+        appended_data.append(NLDAS_stats)
+
+
+# see pd.concat documentation for more info
+appended_data = pd.concat(appended_data)
+# write DataFrame to an excel sheet
+csv_monthly_filename = os.path.join(path, 'NLDAS_Monthly_Min_Max_Values_' + str(start_m).zfill(2) + "_" + str(start_yr)
+                                    + '_UTC_to_' + str(end_m).zfill(2) + "_" + str(end_yr) + '_UTC.csv')
+appended_data.to_csv(csv_monthly_filename, sep=',', index=False)
 
 path = 'C:\\Users\\mcgr323\\projects\\wrf'
 start_m = 12
