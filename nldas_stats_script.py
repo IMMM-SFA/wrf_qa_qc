@@ -4,6 +4,7 @@ import timeit
 import os
 from glob import glob
 import xarray as xr
+import daterange
 from dateutil.rrule import rrule, MONTHLY
 from datetime import datetime
 
@@ -295,8 +296,10 @@ def stats_by_year(path, year):
 
 
 path = 'C:\\Users\\mcgr323\\projects\\wrf'
-year = 2007
-
-stats_by_year(path, year)
+start_dt = 2000
+end_dt = 2009
+years = list(range(start_dt, end_dt + 1))
+for i in range(1, len(years)):
+    stats_by_year(path, int(years[i]))
 
 print("\n", "Total Runtime: ", timeit.default_timer() - start_time)  # end timer and print
