@@ -193,71 +193,71 @@ def NLDASstats(path, year, month,
     return stats_df
 
 
-def months(start_m, start_yr, end_m, end_yr):
-    """
-      Function for running moving (rolling) descriptive statistics on all netCDF files at a given location.
-
-      Parameters
-      ----------
-      start_m : int
-          Month to start analysis
-      start_yr : int
-          Year to start analysis.
-      end_m : int
-          Month to end analysis
-      end_yr : int
-          Year to end analysis.
-      Returns
-      -------
-      stats_df : DataFrame
-          Vector of year-month iterations
-
-      """
-
-    start = datetime(start_yr, start_m, 1)
-    end = datetime(end_yr, end_m, 1)
-    return [(d.month, d.year) for d in rrule(MONTHLY, dtstart=start, until=end)]
-
-
-def stats_by_month(path, start_m, start_yr, end_m, end_yr):
-    """
-    Function for running moving (rolling) descriptive statistics on all netCDF files at a given location.
-
-    Parameters
-    ----------
-    path : Str
-        Path to netCDF files for analysis.
-     start_m : int
-          Month to start analysis
-     start_yr : int
-          Year to start analysis.
-     end_m : int
-          Month to end analysis
-     end_yr : int
-          Year to end analysis.
-    Returns
-    -------
-    stats_df : DataFrame
-        Pandas DataFrame for storage of stats.
+# Month selection function commented out for now becasue really want year functionality
+# def months(start_m, start_yr, end_m, end_yr):
+#     """
+#       Function for running moving (rolling) descriptive statistics on all netCDF files at a given location.
+#
+#       Parameters
+#       ----------
+#       start_m : int
+#           Month to start analysis
+#       start_yr : int
+#           Year to start analysis.
+#       end_m : int
+#           Month to end analysis
+#       end_yr : int
+#           Year to end analysis.
+#       Returns
+#       -------
+#       stats_df : DataFrame
+#           Vector of year-month iterations
+#
+#       """
+#
+#     start = datetime(start_yr, start_m, 1)
+#     end = datetime(end_yr, end_m, 1)
+#     return [(d.month, d.year) for d in rrule(MONTHLY, dtstart=start, until=end)]
 
 
-    """
-    month_itr = months(start_m, start_yr, end_m, end_yr)
-
-    appended_data = []
-    for i in range(1, len(month_itr)):
-        year = str(month_itr[i][1])
-        month = str(month_itr[i][0]).zfill(2)
-        NLDAS_stats = NLDASstats(path, year, month)
-        appended_data.append(NLDAS_stats)
-
-
-# see pd.concat documentation for more info
-appended_data = pd.concat(appended_data)
-# write DataFrame to an excel sheet
-csv_monthly_filename = os.path.join(path, 'NLDAS_Monthly_Min_Max_Values_' + str(start_m).zfill(2) + "_" + str(start_yr)
-                                    + '_UTC_to_' + str(end_m).zfill(2) + "_" + str(end_yr) + '_UTC.csv')
-appended_data.to_csv(csv_monthly_filename, sep=',', index=False)
+# def stats_by_month(path, start_m, start_yr, end_m, end_yr):
+#     """
+#     Function for running moving (rolling) descriptive statistics on all netCDF files at a given location.
+#
+#     Parameters
+#     ----------
+#     path : Str
+#         Path to netCDF files for analysis.
+#      start_m : int
+#           Month to start analysis
+#      start_yr : int
+#           Year to start analysis.
+#      end_m : int
+#           Month to end analysis
+#      end_yr : int
+#           Year to end analysis.
+#     Returns
+#     -------
+#     stats_df : DataFrame
+#         Pandas DataFrame for storage of stats.
+#
+#
+#     """
+#     month_itr = months(start_m, start_yr, end_m, end_yr)
+#
+#     appended_data = []
+#     for i in range(1, len(month_itr)):
+#         year = str(month_itr[i][1])
+#         month = str(month_itr[i][0]).zfill(2)
+#         NLDAS_stats = NLDASstats(path, year, month)
+#         appended_data.append(NLDAS_stats)
+#
+#     # see pd.concat documentation for more info
+#     appended_data = pd.concat(appended_data)
+#     # write DataFrame to an excel sheet
+#     csv_monthly_filename = os.path.join(path, 'NLDAS_Monthly_Min_Max_Values_' + str(start_m).zfill(2) + "_" + str(start_yr)
+#                                         + '_UTC_to_' + str(end_m).zfill(2) + "_" + str(end_yr) + '_UTC.csv')
+#     appended_data.to_csv(csv_monthly_filename, sep=',', index=False)
 
 
 def stats_by_year(path, year):
@@ -286,20 +286,17 @@ def stats_by_year(path, year):
         NLDAS_stats = NLDASstats(path, year, month)
         appended_data.append(NLDAS_stats)
 
+    # see pd.concat documentation for more info
+    appended_data = pd.concat(appended_data)
+    # write DataFrame to an excel sheet
+    csv_monthly_filename = os.path.join(path,
+                                        'NLDAS_Monthly_Min_Max_Values_' + year + '_UTC.csv')
+    appended_data.to_csv(csv_monthly_filename, sep=',', index=False)
 
-# see pd.concat documentation for more info
-appended_data = pd.concat(appended_data)
-# write DataFrame to an excel sheet
-csv_monthly_filename = os.path.join(path, 'NLDAS_Monthly_Min_Max_Values_' + str(start_m).zfill(2) + "_" + str(start_yr)
-                                    + '_UTC_to_' + str(end_m).zfill(2) + "_" + str(end_yr) + '_UTC.csv')
-appended_data.to_csv(csv_monthly_filename, sep=',', index=False)
 
 path = 'C:\\Users\\mcgr323\\projects\\wrf'
-start_m = 12
-start_yr = 2006
-end_m = 2
-end_yr = 2007
+year = 2007
 
-stats_by_month(path, start_m, start_yr, end_m, end_yr)
-print(NLDASstats)
+stats_by_year(path, year)
+
 print("\n", "Total Runtime: ", timeit.default_timer() - start_time)  # end timer and print
