@@ -1,22 +1,65 @@
 import numpy as np
 import xarray as xr
-import timeit
+import salem as sl
 import os
 from glob import glob
 import salem as sl
-
-# start timer
-start_time = timeit.default_timer()
+from datetime import datetime, timedelta
 
 
-# comment
+# %% function for opening a variable range of data
+
+def variable_range_data(input_path, start, stop):
+    """
+    Function for opening a variable range of files between speicifed dates (inclusive).
+
+    Input
+    ----------
+    input_path : Str Path to netCDF files for analysis.
+    start : Str "YYYY-MM-DD" Start date of files to open.
+    stop : Str "YYYY-MM-DD" End date of files to open.
+
+    Returns
+    -------
+    rangefiles : List of netCDF files in specified date range.
+
+    """
+
+    # find the starting year, month, and day
+    startyear = start[0: start.find("-")]
+    startmonth = start[start.find("-") + 1: start.rfind("-")]
+    startday = start[start.rfind("-") + 1:]
+
+    # find the ending year, month, and day
+    stopyear = stop[0: stop.find("-")]
+    stopmonth = stop[stop.find("-") + 1: stop.rfind("-")]
+    stopday = stop[stop.rfind("-") + 1:]
+
+    # collect all files for the years in the given range
+    years = [str(int(startyear) + i) for i in range(int(stopyear) - int(startyear) + 1)]
+    yearfiles_list = [sorted(glob(os.path.join(input_path, f"wrfout_*{year}*"))) for year in years]
+    yearfiles = [file for list in yearfiles_list for file in list]
+
+    # calculate the time difference in the given date range
+    startdate = datetime.strptime(start, "%Y-%m-%d")
+    stopdate = datetime.strptime(stop, "%Y-%m-%d")
+    delta = stopdate - startdate
+
+    # create list of all dates between the given range of dates
+    filedates = [str((startdate + timedelta(days=d)).strftime("%Y-%m-%d")) for d in range(delta.days + 1)]
+
+    # collect just the files between the date range that are present in the folder
+    rangefiles = [glob(os.path.join(input_path, f"wrfout_d01_*{date}*"))[0] for date in filedates if
+                  date in str(yearfiles)]
+
+    return rangefiles
 
 
-# %% function for opening one month of data
+# %% function for opening one month of data (DEPRECIATED - use variable_range_data())
 
 def one_month_data(path, year, month):
     """
-    Function for opening one month of data including overlapping files.
+    Function for opening one month of data including overlapping files. (DEPRECIATED - use variable_range_data())
 
     Input
     ----------
@@ -31,13 +74,13 @@ def one_month_data(path, year, month):
     """
 
     # collect all files of a given month and year
-    monthdata = sorted(glob(os.path.join(path, f"wrfout_*{year}-{month}*.nc")))
+    monthdata = sorted(glob(os.path.join(path, f"wrfout_*{year}-{month}*")))
 
     # find the following and preceeding months and year
     month_minus, year_minus = previous_file(year, month)
 
     # take the file that preceeds the specified month and add to collected files, return sorted list
-    last_month = sorted(glob(os.path.join(path, f"wrfout_*{year_minus}-{month_minus}*.nc")))[-1]
+    last_month = sorted(glob(os.path.join(path, f"wrfout_*{year_minus}-{month_minus}*")))[-1]
     monthdata.append(last_month)
     onemonthdata = sorted(monthdata)
 
@@ -158,48 +201,53 @@ def magnitude(ds):
 
 # %% function for aggregating rolling stats on netCDF data
 
-def WRFstats(path, year, month,
+def WRFstats(input_path, output_path, start, stop,
              ds_variables=["LU_INDEX", "Q2", "T2", "PSFC", "U10", "V10", "WINDSPEED", "SFROFF", "UDROFF", "ACSNOM",
                            "SNOW", "SNOWH", "WSPD", "BR",
                            "ZOL", "RAINC", "RAINSH", "RAINNC", "PRECIP", "SNOWNC", "GRAUPELNC", "HAILNC", "SWDOWN",
                            "GLW", "UST", "SNOWC", "SR"]
              ):
     """
-    Function for running moving (rolling) descriptive statistics on all netCDF files at a given location.
+    Function for running moving (rolling) descriptive statistics on all netCDF files between a given range of dates.
 
     Input
     ----------
-    path: Str Path to netCDF files for analysis.
-    year: Str Year of data for files to open.
-    month: Str Month of data for files to open.
-    ds_variables: List Variables to run stats on.
+    input_path : Str Path to netCDF files for analysis.
+    output_path : Str Path for the output netCDF files to be stored.
+    year : Str Year of data for files to open.
+    month : Str Month of data for files to open.
+    ds_variables : List Variables to run stats on.
 
     Returns
     -------
-    mean_roll: DataSet netCDF file for storage of rolling mean.
-    stddev_roll: DataSet netCDF file for storage of rolling standard deviation.
-    max_roll: DataSet netCDF file for storage of rolling maximums.
-    min_roll: DataSet netCDF file for storage of rolling minimums.
+    mean_roll : DataSet netCDF file for storage of rolling mean.
+    avg_median_roll : DataSet netCDF file for storage of rolling average median.
+    stddev_roll : DataSet netCDF file for storage of rolling standard deviation.
+    max_roll : DataSet netCDF file for storage of rolling maximums.
+    min_roll : DataSet netCDF file for storage of rolling minimums.
 
     """
 
     # create list of netCDF files at path
-    # nc_files = [file for file in os.listdir(path) if file.endswith(".nc")]
-    nc_files = one_month_data(path, year, month)
+    nc_files = variable_range_data(input_path, start, stop)
 
     # create rolling stats variables, set intial values
     n = 0  # counter
-    sample_size_roll = None
     mean_roll = 0
+    avg_median_roll = 0
     stddev_roll = None
-    median_roll = 0
+    sample_size_roll = None
     max_roll = None
     min_roll = None
 
     # iterate through each nc file and create dataset
     for file in nc_files:
-        ds_sl = sl.open_wrf_dataset(file)  # open netCDF data path and create xarray dataset using salem
-        ds = ds_sl.sel(time=f"{year}-{month}")  # slice data by year and month
+
+        ds = sl.open_wrf_dataset(file)  # open netCDF data path and create xarray dataset using salem
+
+        # check if last file in run, if so then slice data by stop date
+        if file == nc_files[-1]:
+            ds = ds.sel(time=slice(f"{stop}"))
 
         # combine and deaccumulate precipitation variables into new variable
         deacc_precip(ds, ds_variables)
@@ -210,13 +258,16 @@ def WRFstats(path, year, month,
         # calculate descriptive stats on file using xarray
         mean = ds[ds_variables].mean(dim="time", skipna=True)
         stddev = ds[ds_variables].std(dim="time", skipna=True)
-        median = ds[ds_variables].median(dim="time", skipna=True)
+        avg_median = ds[ds_variables].median(dim="time", skipna=True)
         max = ds[ds_variables].max(dim="time", skipna=True)
         min = ds[ds_variables].min(dim="time", skipna=True)
         sample_size = ds[ds_variables].count(dim="time")
 
         # aggregate means using cumulative moving average method
         mean_roll = (mean + (n * mean_roll)) / (n + 1)
+
+        # aggregate average medians using cumulative moving average method
+        avg_median_roll = (avg_median + (n * avg_median_roll)) / (n + 1)
 
         # function for calculating rolling std dev and cumulative sample size
         stddev_roll, sample_size_roll = WRFstddev(stddev, sample_size, stddev_roll, sample_size_roll, n)
@@ -225,24 +276,30 @@ def WRFstats(path, year, month,
         max_roll, min_roll = WRFminmax(max, min, max_roll, min_roll, n)
 
         # TODO cumulative methods for median
-        median_roll = (median + (n * median_roll)) / (n + 1)
 
         n += 1  # iterate counter
 
-        print("Run: ", n)  # just to make sure it's still working...
-        print("Current Runtime: ", timeit.default_timer() - start_time, "\n")
+    # specify the location for the output of the program
+    output_filename = os.path.join(output_path + f"{start}_{stop}_")
 
-    return mean_roll, stddev_roll, max_roll, min_roll
+    # save each output stat as a netCDF file
+    mean_roll.to_netcdf(path=output_filename + "Mean_DS.nc")
+    avg_median_roll.to_netcdf(path=output_filename + "Avg_Median_DS.nc")
+    stddev_roll.to_netcdf(path=output_filename + "StdDev_DS.nc")
+    max_roll.to_netcdf(path=output_filename + "Max_DS.nc")
+    min_roll.to_netcdf(path=output_filename + "Min_DS.nc")
+
+    return mean_roll, avg_median_roll, stddev_roll, max_roll, min_roll
 
 
 # %% run code
 
-path = r"C:\Users\mart229\OneDrive - PNNL\Desktop\Stuff\IM3\WRF\Month_Data\\"
-year = "2007"
-month = "01"
+# specify the path to the location of the files to be analyzed,
+# the path for the output to be stored, and the start and stop dates
+input_path = "/project/projectdirs/m2702/gsharing/CONUS_TGW_WRF_Historical/"
+output_path = "/project/projectdirs/m2702/gsharing/QAQC/"
+start = "1999-01-01"
+stop = "1999-12-31"
 
-# WRFstats = WRFstats(path, year, month)
-mean_ds, stddev_ds, max_ds, min_ds = WRFstats(path, year, month)
-
-# print(WRFstats)
-print("\n", "Total Runtime: ", timeit.default_timer() - start_time)  # end timer and print
+# run the WRFstats program
+mean_ds, avg_median_ds, stddev_ds, max_ds, min_ds = WRFstats(input_path, output_path, start, stop)

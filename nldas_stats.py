@@ -35,7 +35,8 @@ def variable_range_data(input_path, start, stop):
 
     # collect all files for the years in the given range
     years = [str(int(startyear) + i) for i in range(int(stopyear) - int(startyear) + 1)]
-    yearfiles_list = [sorted(glob(os.path.join(input_path, f"NLDAS_FORA0125_H.A*{year}*.002.grb.SUB.nc4"))) for year in years]
+    yearfiles_list = [sorted(glob(os.path.join(input_path, f"NLDAS_FORA0125_H.A*{year}*.002.grb.SUB.nc4"))) for year in
+                      years]
     yearfiles = [file for list in yearfiles_list for file in list]
 
     # calculate the time difference in the given date range
@@ -47,7 +48,8 @@ def variable_range_data(input_path, start, stop):
     filedates = [str((startdate + timedelta(days=d)).strftime("%Y%m%d")) for d in range(delta.days + 1)]
 
     # collect just the files between the date range that are present in the folder
-    rangefiles = [glob(os.path.join(input_path, f"NLDAS_FORA0125_H.A*{date}*.002.grb.SUB.nc4"))[0] for date in filedates if
+    rangefiles = [glob(os.path.join(input_path, f"NLDAS_FORA0125_H.A*{date}*.002.grb.SUB.nc4"))[0] for date in filedates
+                  if
                   date in str(yearfiles)]
 
     return rangefiles
@@ -73,7 +75,7 @@ def NLDASminmax(max, min, max_roll, min_roll, n):
 
     """
 
-    ## check if this is the first file in the run, if so then assign values from current dataset
+    # check if this is the first file in the run, if so then assign values from current dataset
     if n == 0:
         max_roll = max
         min_roll = min
@@ -127,7 +129,6 @@ def NLDASstddev(stddev, sample_size, stddev_roll, sample_size_roll, n):
     return stddev_roll, sample_size_roll
 
 
-
 # %% function for calculating magnitude of velocity vectors
 
 def magnitude(ds):
@@ -139,9 +140,9 @@ def magnitude(ds):
 # %% function for aggregating rolling stats on netCDF data
 
 def NLDASstats(input_path, output_path, start, stop,
-             ds_variables=["TMP", "SPFH", "PRES", "UGRD", "VGRD", "DLWRF",
+               ds_variables=["TMP", "SPFH", "PRES", "UGRD", "VGRD", "DLWRF",
                              "PEVAP", "APCP", "DSWRF"]
-             ):
+               ):
     """
     Function for running moving (rolling) descriptive statistics on all netCDF files between a given range of dates.
 
@@ -178,12 +179,11 @@ def NLDASstats(input_path, output_path, start, stop,
     # iterate through each nc file and create dataset
     for file in nc_files:
 
-        ds = xr.open_dataset(file)  # open netCDF data path and create xarray dataset using salem
+        ds = xr.open_dataset(file)  # open netCDF data path and create xarray dataset using xarray
 
         # check if last file in run, if so then slice data by stop date
         if file == nc_files[-1]:
             ds = ds.sel(time=slice(f"{stop}"))
-
 
         # create new variable for wind speed from magnitudes of velocity vectors
         magnitude(ds)
@@ -207,7 +207,6 @@ def NLDASstats(input_path, output_path, start, stop,
 
         # function for calculating rolling max and min
         max_roll, min_roll = NLDASminmax(max, min, max_roll, min_roll, n)
-
 
         n += 1  # iterate counter
 
