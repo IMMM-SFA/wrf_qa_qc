@@ -253,40 +253,15 @@ def NLDASstats(input_path, output_path, start, stop,
         #     mean = mean_ds.rename({ds_variables[i]: f"{ds_variables[i]}_mean"})
 
         # concatenate stats
-        all_stats = xr.merge([mean_ds, avg_median_ds, max_ds, min_ds, stddev_ds]) 
+        all_stats = xr.merge([mean_ds, avg_median_ds, max_ds, min_ds, stddev_ds])
+
+        # specify the location for the output of the program
+        output_filename = os.path.join(output_path + f"{start}_{stop}_")
+
+        # save each output stat as a netCDF file
+        all_stats.to_netcdf(path=output_filename + "all_stats_DS.nc")
 
     return all_stats
-
-    def concat_stats(input_path, output_path, start, stop):
-        """
-        Function for running moving (rolling) descriptive statistics on all netCDF files between a given range of dates.
-
-        Input
-        ----------
-        input_path : Str Path to netCDF files for analysis.
-        output_path : Str Path for the output netCDF files to be stored.
-        year : Str Year of data for files to open.
-        month : Str Month of data for files to open.
-
-        Returns
-        -------
-
-        """
-
-    # run the nldasstats script
-    mean_ds,  max_ds, min_ds, avg_median_ds, stddev_ds= NLDASstats(input_path, output_path, start, stop)
-
-    all_stats = xr.merge([mean_ds, avg_median_ds, max_ds, min_ds, stddev_ds])
-
-    time_index = pd.date_range(start, stop, freq='M', closed='left')
-
-    xr.concat([], dim=time_index)
-
-    # specify the location for the output of the program
-    output_filename = os.path.join(output_path + f"{start}_{stop}_")
-
-    # save each output stat as a netCDF file
-    all_stats.to_netcdf(path=output_filename + "all_stats_DS.nc")
 
 
 # %% run code
