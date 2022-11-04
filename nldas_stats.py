@@ -1,135 +1,11 @@
 import numpy as np
 import xarray as xr
 import os
+import pandas as pd
 from glob import glob
-from datetime import datetime, timedelta
 
 
-# %% function for opening a variable range of data
-
-def variable_range_data(input_path, start, stop):
-    """
-    Function for opening a variable range of files between speicifed dates (inclusive).
-
-    Input
-    ----------
-    input_path : Str Path to netCDF files for analysis.
-    start : Str "YYYY-MM-DD" Start date of files to open.
-    stop : Str "YYYY-MM-DD" End date of files to open.
-
-    Returns
-    -------
-    rangefiles : List of netCDF files in specified date range.
-
-    """
-
-    # find the starting year, month, and day
-    startyear = start[0: start.find("-")]
-    startmonth = start[start.find("-") + 1: start.rfind("-")]
-    startday = start[start.rfind("-") + 1:]
-
-    # find the ending year, month, and day
-    stopyear = stop[0: stop.find("-")]
-    stopmonth = stop[stop.find("-") + 1: stop.rfind("-")]
-    stopday = stop[stop.rfind("-") + 1:]
-
-    # collect all files for the years in the given range
-    years = [str(int(startyear) + i) for i in range(int(stopyear) - int(startyear) + 1)]
-    yearfiles_list = [sorted(glob(os.path.join(input_path, f"NLDAS_FORA0125_H.A*{year}*.002.grb.SUB.nc4"))) for year in
-                      years]
-    yearfiles = [file for list in yearfiles_list for file in list]
-
-    # calculate the time difference in the given date range
-    startdate = datetime.strptime(start, "%Y-%m-%d")
-    stopdate = datetime.strptime(stop, "%Y-%m-%d")
-    delta = stopdate - startdate
-
-    # create list of all dates between the given range of dates
-    filedates = [str((startdate + timedelta(days=d)).strftime("%Y%m%d")) for d in range(delta.days + 1)]
-
-    # collect just the files between the date range that are present in the folder
-    rangefiles = [glob(os.path.join(input_path, f"NLDAS_FORA0125_H.A*{date}*.002.grb.SUB.nc4"))[0] for date in filedates
-                  if
-                  date in str(yearfiles)]
-
-    return rangefiles
-
-
-# %% function for calculating rolling max and min
-
-def NLDASminmax(max, min, max_roll, min_roll, n):
-    """
-    Function for calculating rolling maximum and minimum values for each variable.
-
-    Input
-    ----------
-    max : DataSet Maximum values for current file.
-    min : DataSet Minimum values for current file.
-    max_roll : DataSet Rolling maximum values.
-    min_roll : DataSet Rolling minimum values.
-    n : Int Current value of iteration counter.
-
-    Returns
-    -------
-    max_roll, min_roll : DataSets for storage of maximum and minimum values.
-
-    """
-
-    # check if this is the first file in the run, if so then assign values from current dataset
-    if n == 0:
-        max_roll = max
-        min_roll = min
-
-    else:
-        # check if new max is greater than old max, if so then replace it, if none are greater then skip loop
-        if (max > max_roll).any():
-            max_roll = xr.where(max > max_roll, max, max_roll)
-
-        # check if new min is less than old min, if so then replace it, if none are less then skip loop
-        if (min < max_roll).any():
-            min_roll = xr.where(min < min_roll, min, min_roll)
-
-    return max_roll, min_roll
-
-
-# %% function for calculating cumulative standard deviation and sample size
-
-def NLDASstddev(stddev, sample_size, stddev_roll, sample_size_roll, n):
-    """
-    Function for calculating pooled standard deviation and rolling sample size values for each variable.
-
-    Input
-    ----------
-    stddev : DataSet Standard deviation values for current file.
-    stddev_roll : DataSet Rolling standard deviation values.
-    sample_size : DataSet Sample sizes of each variable for current file.
-    sample_size_roll : DataSet Rolling sample sizes of each variable.
-    n : Int Current value of iteration counter.
-
-    Returns
-    -------
-    stddev_roll, sample_size_roll : DataSets for storage of rolling standard deviation and sample size values.
-
-    """
-
-    # check if this is the first file in the run, if so then assign values from current dataset
-    if n == 0:
-        sample_size_roll = sample_size
-        stddev_roll = stddev
-    else:
-        sample_size_roll = sample_size_roll + sample_size
-
-        # Cohen pooled method of combining weighted std devs, assuming similar variances in samples
-        sd1 = stddev_roll
-        sd2 = stddev
-        n1 = sample_size_roll
-        n2 = sample_size
-        stddev_roll = np.sqrt((((n1 - 1) * sd1 ** 2) + ((n2 - 1) * sd2 ** 2)) / (n1 + n2 - 2))
-
-    return stddev_roll, sample_size_roll
-
-
-# %% function for calculating magnitude of velocity vectors
+# function for calculating magnitude of velocity vectors
 
 def magnitude(ds):
     U = ds["UGRD"]
@@ -137,7 +13,7 @@ def magnitude(ds):
     ds["WINDSPEED"] = np.sqrt(U ** 2 + V ** 2)
 
 
-# %% function for aggregating rolling stats on netCDF data
+# function for aggregating rolling stats on netCDF data
 
 def NLDASstats(input_path, output_path, start, stop,
                ds_variables=["TMP", "SPFH", "PRES", "UGRD", "VGRD", "DLWRF",
@@ -150,8 +26,8 @@ def NLDASstats(input_path, output_path, start, stop,
     ----------
     input_path : Str Path to netCDF files for analysis.
     output_path : Str Path for the output netCDF files to be stored.
-    year : Str Year of data for files to open.
-    month : Str Month of data for files to open.
+    start : Str start date for files
+    stop : Str stop date for files
     ds_variables : List Variables to run stats on.
 
     Returns
@@ -163,118 +39,101 @@ def NLDASstats(input_path, output_path, start, stop,
     min_roll : DataSet netCDF file for storage of rolling minimums.
 
     """
-
-    # create list of netCDF files at path
-    nc_files = variable_range_data(input_path, start, stop)
-
-    # create rolling stats variables, set intial values
     n = 0  # counter
-    mean_roll = 0
-    avg_median_roll = 0
-    stddev_roll = None
-    sample_size_roll = None
-    max_roll = None
-    min_roll = None
 
-    # iterate through each nc file and create dataset
-    for file in nc_files:
+    # create list of range of months to open
+    months = pd.date_range(start, stop, freq="MS").strftime("%Y%m").tolist()
 
-        ds = xr.open_dataset(file)  # open netCDF data path and create xarray dataset using xarray
+    # iterate through each month and create dataset
+    for month in months:
 
-        # check if last file in run, if so then slice data by stop date
-        if file == nc_files[-1]:
-            ds = ds.sel(time=slice(f"{stop}"))
+        # create list of files in the given month in the range of months specified
+        nc_files = sorted(glob(os.path.join(input_path, f"NLDAS_FORA0125_H.A*{month}*.002.grb.SUB.nc4")))
+
+        ds = xr.open_mfdataset(nc_files)  # open all netCDF files in month and create xarray dataset using salem
+        # ds = ds.sel(time=slice(f"{month}"))  # slice by the current month
 
         # create new variable for wind speed from magnitudes of velocity vectors
         magnitude(ds)
 
         # calculate descriptive stats on file using xarray
-        mean = ds[ds_variables].mean(dim="time", skipna=True)
-        stddev = ds[ds_variables].std(dim="time", skipna=True)
-        avg_median = ds[ds_variables].median(dim="time", skipna=True)
-        max = ds[ds_variables].max(dim="time", skipna=True)
-        min = ds[ds_variables].min(dim="time", skipna=True)
-        sample_size = ds[ds_variables].count(dim="time")
+        mean_ds = ds[ds_variables].mean(dim="time", skipna=True)
+        median_ds = ds[ds_variables].median(dim="time", skipna=True)
+        stddev_ds = ds[ds_variables].std(dim="time", skipna=True)
+        max_ds = ds[ds_variables].max(dim="time", skipna=True)
+        min_ds = ds[ds_variables].min(dim="time", skipna=True)
 
-        # aggregate means using cumulative moving average method
-        mean_roll = (mean + (n * mean_roll)) / (n + 1)
+        mean_df = mean_ds.rename(
+            {ds_variables[0]: f"{ds_variables[0]}_mean", ds_variables[1]: f"{ds_variables[1]}_mean",
+             ds_variables[2]: f"{ds_variables[2]}_mean", ds_variables[3]: f"{ds_variables[3]}_mean",
+             ds_variables[4]: f"{ds_variables[4]}_mean", ds_variables[5]: f"{ds_variables[5]}_mean",
+             ds_variables[6]: f"{ds_variables[6]}_mean", ds_variables[7]: f"{ds_variables[7]}_mean",
+             ds_variables[8]: f"{ds_variables[8]}_mean"})
 
-        # aggregate average medians using cumulative moving average method
-        avg_median_roll = (avg_median + (n * avg_median_roll)) / (n + 1)
+        max_df = max_ds.rename({ds_variables[0]: f"{ds_variables[0]}_max", ds_variables[1]: f"{ds_variables[1]}_max",
+                                ds_variables[2]: f"{ds_variables[2]}_max", ds_variables[3]: f"{ds_variables[3]}_max",
+                                ds_variables[4]: f"{ds_variables[4]}_max", ds_variables[5]: f"{ds_variables[5]}_max",
+                                ds_variables[6]: f"{ds_variables[6]}_max", ds_variables[7]: f"{ds_variables[7]}_max",
+                                ds_variables[8]: f"{ds_variables[8]}_max"})
 
-        # function for calculating rolling std dev and cumulative sample size
-        stddev_roll, sample_size_roll = NLDASstddev(stddev, sample_size, stddev_roll, sample_size_roll, n)
+        min_df = min_ds.rename({ds_variables[0]: f"{ds_variables[0]}_min", ds_variables[1]: f"{ds_variables[1]}_min",
+                                ds_variables[2]: f"{ds_variables[2]}_min", ds_variables[3]: f"{ds_variables[3]}_min",
+                                ds_variables[4]: f"{ds_variables[4]}_min", ds_variables[5]: f"{ds_variables[5]}_min",
+                                ds_variables[6]: f"{ds_variables[6]}_min", ds_variables[7]: f"{ds_variables[7]}_min",
+                                ds_variables[8]: f"{ds_variables[8]}_min"})
 
-        # function for calculating rolling max and min
-        max_roll, min_roll = NLDASminmax(max, min, max_roll, min_roll, n)
+        med_df = median_ds.rename({ds_variables[0]: f"{ds_variables[0]}_med",
+                                   ds_variables[1]: f"{ds_variables[1]}_med",
+                                   ds_variables[2]: f"{ds_variables[2]}_med",
+                                   ds_variables[3]: f"{ds_variables[3]}_med",
+                                   ds_variables[4]: f"{ds_variables[4]}_med",
+                                   ds_variables[5]: f"{ds_variables[5]}_med",
+                                   ds_variables[6]: f"{ds_variables[6]}_med",
+                                   ds_variables[7]: f"{ds_variables[7]}_med",
+                                   ds_variables[8]: f"{ds_variables[8]}_med"})
+
+        std_dev_df = stddev_ds.rename({ds_variables[0]: f"{ds_variables[0]}_std",
+                                       ds_variables[1]: f"{ds_variables[1]}_std",
+                                       ds_variables[2]: f"{ds_variables[2]}_std",
+                                       ds_variables[3]: f"{ds_variables[3]}_std",
+                                       ds_variables[4]: f"{ds_variables[4]}_std",
+                                       ds_variables[5]: f"{ds_variables[5]}_std",
+                                       ds_variables[6]: f"{ds_variables[6]}_std",
+                                       ds_variables[7]: f"{ds_variables[7]}_std",
+                                       ds_variables[8]: f"{ds_variables[8]}_std"})
+
+        # concatenate stats
+        all_stats = xr.merge([mean_df, med_df, max_df, min_df, std_dev_df])
+
+        # get string for year
+        year_dir = month[0:4]
+
+        # create path for year
+        year_path = os.path.join(output_path, year_dir)
+
+        # checking if the directory demo_folder exist or not.
+        if not os.path.exists(year_path):
+            # if the demo_folder directory is not present create it
+            os.makedirs(year_path)
+
+        # specify the location for the output of the program
+        output_filename = os.path.join(year_path + "/" + f"NLDAS_{month}_all_stats_DS.nc")
+
+        # save each output stat as a netCDF file
+        all_stats.to_netcdf(path=output_filename)
 
         n += 1  # iterate counter
 
-        mean_df = mean_roll.rename({ds_variables[0]: f"{ds_variables[0]}_mean", ds_variables[1]: f"{ds_variables[1]}_mean",
-                                 ds_variables[2]: f"{ds_variables[2]}_mean", ds_variables[3]: f"{ds_variables[3]}_mean",
-                                 ds_variables[4]: f"{ds_variables[4]}_mean", ds_variables[5]: f"{ds_variables[5]}_mean",
-                                 ds_variables[6]: f"{ds_variables[6]}_mean", ds_variables[7]: f"{ds_variables[7]}_mean",
-                                 ds_variables[8]: f"{ds_variables[8]}_mean"})
+    return
 
-        max_df = max_roll.rename({ds_variables[0]: f"{ds_variables[0]}_max", ds_variables[1]: f"{ds_variables[1]}_max",
-                                 ds_variables[2]: f"{ds_variables[2]}_max", ds_variables[3]: f"{ds_variables[3]}_max",
-                                 ds_variables[4]: f"{ds_variables[4]}_max", ds_variables[5]: f"{ds_variables[5]}_max",
-                                 ds_variables[6]: f"{ds_variables[6]}_max", ds_variables[7]: f"{ds_variables[7]}_max",
-                                 ds_variables[8]: f"{ds_variables[8]}_max"})
-
-        min_df = min_roll.rename({ds_variables[0]: f"{ds_variables[0]}_min", ds_variables[1]: f"{ds_variables[1]}_min",
-                                 ds_variables[2]: f"{ds_variables[2]}_min", ds_variables[3]: f"{ds_variables[3]}_min",
-                                 ds_variables[4]: f"{ds_variables[4]}_min", ds_variables[5]: f"{ds_variables[5]}_min",
-                                 ds_variables[6]: f"{ds_variables[6]}_min", ds_variables[7]: f"{ds_variables[7]}_min",
-                                 ds_variables[8]: f"{ds_variables[8]}_min"})
-
-        avg_med_df = avg_median_roll.rename({ds_variables[0]: f"{ds_variables[0]}_med",
-                                          ds_variables[1]: f"{ds_variables[1]}_med",
-                                          ds_variables[2]: f"{ds_variables[2]}_med",
-                                          ds_variables[3]: f"{ds_variables[3]}_med",
-                                          ds_variables[4]: f"{ds_variables[4]}_med",
-                                          ds_variables[5]: f"{ds_variables[5]}_med",
-                                          ds_variables[6]: f"{ds_variables[6]}_med",
-                                          ds_variables[7]: f"{ds_variables[7]}_med",
-                                          ds_variables[8]: f"{ds_variables[8]}_med"})
-
-        std_dev_df = stddev_roll.rename({ds_variables[0]: f"{ds_variables[0]}_std",
-                                          ds_variables[1]: f"{ds_variables[1]}_std",
-                                          ds_variables[2]: f"{ds_variables[2]}_std",
-                                          ds_variables[3]: f"{ds_variables[3]}_std",
-                                          ds_variables[4]: f"{ds_variables[4]}_std",
-                                          ds_variables[5]: f"{ds_variables[5]}_std",
-                                          ds_variables[6]: f"{ds_variables[6]}_std",
-                                          ds_variables[7]: f"{ds_variables[7]}_std",
-                                          ds_variables[8]: f"{ds_variables[8]}_std"})
-
-        # mean = xr.Dataset()
-        # for i in range(len(ds_variables)):
-        #     mean = mean_ds.rename({ds_variables[i]: f"{ds_variables[i]}_mean"})
-
-        # concatenate stats
-        all_stats = xr.merge([mean_ds, avg_median_ds, max_ds, min_ds, stddev_ds])
-
-        # specify the location for the output of the program
-        output_filename = os.path.join(output_path + f"{start}_{stop}_")
-
-        # save each output stat as a netCDF file
-        all_stats.to_netcdf(path=output_filename + "all_stats_DS.nc")
-
-    return all_stats
-
-
-# %% run code
 
 # specify the path to the location of the files to be analyzed,
 # the path for the output to be stored, and the start and stop dates
-input_path = "/global/cscratch1/sd/mcgrathc/"
-output_path = "/global/cscratch1/sd/mcgrathc/nldas_output"
-input_path = "C:/Users/mcgr323/projects/wrf/nldas_input/"
-output_path = "C:/Users/mcgr323/projects/wrf/nldas_output/"
+input_path = "/global/cfs/projectdirs/m2702/QAQC/NLDAS/NLDAS_input"
+output_path = "/global/cfs/projectdirs/m2702/QAQC/NLDAS/NLDAS_output"
 
-start = "2007-01-01"
-stop = "2007-02-28"
+start = "1980-01-01"
+stop = "1990-01-01"
 
-# run the WRFstats program
-mean_ds, avg_median_ds, stddev_ds, max_ds, min_ds = NLDASstats(input_path, output_path, start, stop)
+# run the NLDASstats program
+all_stats = NLDASstats(input_path, output_path, start, stop)
