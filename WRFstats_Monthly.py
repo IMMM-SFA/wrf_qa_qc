@@ -1,10 +1,11 @@
 import numpy as np
 import pandas as pd
-import xarray as xr
 import salem as sl
-import dask
 import os
 from glob import glob
+from WRFstats_Functions import temp_conv, deacc_precip, windspeed
+from WRFstats_Functions import descriptive_stats, SW_Test, skew_kurtosis_test
+from WRF_QAQC_OutlierAnalysis_Functions import IQR_Test, ZScore_Test, iqr_outlier_storage, z_outlier_storage
 
 
 #%% function to find the previous month containing parts of the given month
@@ -28,36 +29,14 @@ def previous_month(year_month):
     return previousmonth
 
 
-#%% function to combine and deaccumulate precipitation variables into new variable
-def deacc_precip(ds, ds_variables):
-    
-    # check if the variable PRECIP was included in the variables list, if so then create variable from rain variables and deaccumulate
-    if "PRECIP" in ds_variables:
-        ds["PRECIP"] = ds["RAINC"] + ds["RAINSH"] + ds["RAINNC"]
-        ds["PRECIP"].values = np.diff(ds["PRECIP"].values, axis = 0, prepend = np.array([ds["PRECIP"][0].values]))
-    
-    # deaccumulate rain variables
-    ds["RAINC"].values = np.diff(ds["RAINC"].values, axis = 0, prepend = np.array([ds["RAINC"][0].values]))
-    ds["RAINSH"].values = np.diff(ds["RAINSH"].values, axis = 0, prepend = np.array([ds["RAINSH"][0].values]))
-    ds["RAINNC"].values = np.diff(ds["RAINNC"].values, axis = 0, prepend = np.array([ds["RAINNC"][0].values]))
-
-
-#%% function for calculating magnitude of velocity vectors
-def magnitude(ds):
-    
-    U = ds["U10"]
-    V = ds["V10"]
-    ds["WINDSPEED"] = np.sqrt( U**2 + V**2 )
-    
-
-#%% function for calculating descriptive stats on monthly netCDF data
-def WRFstats(input_path, output_path, start, stop, 
-             ds_variables=["LU_INDEX","Q2","T2","PSFC","U10","V10","WINDSPEED","SFROFF","UDROFF","ACSNOM","SNOW","SNOWH","WSPD","BR",
-                           "ZOL","RAINC","RAINSH","RAINNC","PRECIP","SNOWNC","GRAUPELNC","HAILNC","SWDOWN","GLW","UST","SNOWC","SR"]
+#%% function for calculating stats on monthly netCDF data
+def WRFstats(input_path, output_path, start, stop, descriptive=True, distribution=True, outliers=True,
+             ds_variables=["LU_INDEX","Q2","T2","PSFC","U10","V10","SFROFF","UDROFF","ACSNOM","SNOW","SNOWH","WSPD","BR",
+                           "ZOL","RAINC","RAINSH","RAINNC","SNOWNC","GRAUPELNC","HAILNC","SWDOWN","GLW","UST","SNOWC","SR"]
              ):
     
     """
-    Function for calculating descriptive statistics on monthly netCDF data between a given range of months.
+    Function for calculating descriptive statistics and statistical outliers on monthly WRF netCDF data between a given range of months.
     
     Input
     ----------
@@ -69,11 +48,10 @@ def WRFstats(input_path, output_path, start, stop,
         
     Returns
     -------
-    stats : DataSet netCDF file for storage of descriptive statistics.
+    stats_list : List of datasets for storage of statistics output.
     
     """
     
-    n = 0 # counter
     stats_list = []
     
     # create list of range of months to open
@@ -92,37 +70,74 @@ def WRFstats(input_path, output_path, start, stop,
         
         ds = sl.open_mf_wrf_dataset(nc_files) # open all netCDF files in month and create xarray dataset using salem
         ds = ds.sel(time = slice(f"{month}")) # slice by the current month
+        ds.load() # load into memory for computations
         
-        # combine and deaccumulate precipitation variables into new variable
+        # convert T2 variable from K to F or C
+        temp_conv(ds, ds_variables)
+        
+        # combine and deaccumulate precipitation variables into PRECIP variable
         deacc_precip(ds, ds_variables)
         
-        # create new variable for wind speed from magnitudes of velocity vectors
-        magnitude(ds)
+        # create new variable WINDSPEED from magnitudes of velocity vectors
+        windspeed(ds, ds_variables)
         
-        # calculate descriptive stats on file using xarray
-        mean_ds = ds[ds_variables].mean(dim = "time", skipna = True)
-        median_ds = ds[ds_variables].median(dim = "time", skipna = True)
-        stddev_ds = ds[ds_variables].std(dim = "time", skipna = True)
-        max_ds = ds[ds_variables].max(dim = "time", skipna = True)
-        min_ds = ds[ds_variables].min(dim = "time", skipna = True)
+        # calculate descriptive stats on files using xarray
+        if descriptive == True:
+            mean_ds, median_ds, stddev_ds, max_ds, min_ds = descriptive_stats(ds, ds_variables)
         
-        # concatenate stats
-        #stats = xr.merge([mean_ds, median_ds, stddev_ds, max_ds, min_ds])
-        #stats_list.append(stats) # store in list?
+        else:    
+            mean_ds, median_ds, stddev_ds, max_ds, min_ds = (None,)*5
+        
+        # calculate distribution stats on files using xarray
+        if distribution == True:
+            # Shapiro-Wilks test function for normality, gives percent of distributions that are normal
+            SW_ds, normality = SW_Test(ds, ds_variables)
+            
+            # skew and kurtosis tests
+            skew_ds, kurtosis_ds = skew_kurtosis_test(ds, ds_variables)
+            
+        else:
+            SW_ds, normality, skew_ds, kurtosis_ds = (None,)*4
+        
+        # calculate statistical outliers
+        if outliers == True:
+            # outlier detection with IQR test
+            iqr_ds, q75_ds, q25_ds, outlier_upper, outlier_lower = IQR_Test(ds, ds_variables)
+            iqr_outlier_df_dict = iqr_outlier_storage(ds, ds_variables, outlier_upper, outlier_lower, q75_ds, q25_ds)
+            
+            # outlier detection with Z-score test
+            zscore_ds, z_outlier_upper, z_outlier_lower, z_threshold = ZScore_Test(ds, ds_variables)
+            z_outlier_df_dict = z_outlier_storage(ds, ds_variables, zscore_ds, z_outlier_upper, z_outlier_lower, z_threshold)
+            
+        else:
+            iqr_ds, q75_ds, q25_ds, outlier_upper, outlier_lower, iqr_outlier_df_dict = (None,)*6
+            zscore_ds, z_outlier_upper, z_outlier_lower, z_threshold, z_outlier_df_dict = (None,)*5
         
         # specify the location for the output of the program
-        output_filename = os.path.join(output_path + f"WRF_{month}_")
+        output_filename = os.path.join(output_path + f"WRFstats_{month}.npy")
         
-        # save each output stats as a netCDF file
-        #stats.to_netcdf(path = output_filename + "Stats.nc")
-        mean_ds.to_netcdf(path = output_filename + "Mean_DS.nc")
-        median_ds.to_netcdf(path = output_filename + "Median_DS.nc")
-        stddev_ds.to_netcdf(path = output_filename + "StdDev_DS.nc")
-        max_ds.to_netcdf(path = output_filename + "Max_DS.nc")
-        min_ds.to_netcdf(path = output_filename + "Min_DS.nc")
+        # concatenate stats into dictionary and save as numpy dict
+        stats_dict = {
+                      "Means": mean_ds,
+                      "Medians": median_ds,
+                      "Standard Deviation": stddev_ds,
+                      "Max": max_ds,
+                      "Min": min_ds,
+                      "Shapiro-Wilks": SW_ds,
+                      "% Normal": normality,
+                      "Skew": skew_ds,
+                      "Kurtosis": kurtosis_ds,
+                      "Q75": q75_ds,
+                      "Q25": q25_ds,
+                      "IQR": iqr_ds,
+                      "IQR Outliers": iqr_outlier_df_dict,
+                      "Z-Scores": zscore_ds,
+                      "Z-Score Outliers": z_outlier_df_dict
+                      }
         
-        n += 1 # iterate counter
-        
+        np.save(os.path.join(output_path, output_filename), stats_dict)
+        stats_list.append(stats_dict)
+    
     
     return stats_list
 
@@ -133,8 +148,9 @@ def WRFstats(input_path, output_path, start, stop,
 # the path for the output to be stored, and the start and stop dates
 input_path = "/project/projectdirs/m2702/gsharing/CONUS_TGW_WRF_Historical/"
 output_path = "/project/projectdirs/m2702/gsharing/QAQC/"
-start = "1999-01"
-stop = "1999-12"
+start = "1989-01"
+stop = "1989-12"
 
 # run the WRFstats program
 stats = WRFstats(input_path, output_path, start, stop)
+
