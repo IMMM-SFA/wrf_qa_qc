@@ -13,6 +13,43 @@ def magnitude(ds):
     ds["WINDSPEED"] = np.sqrt(U ** 2 + V ** 2)
 
 
+def rename_stats(mean_ds, median_ds, stddev_ds, max_ds, min_ds,
+                 ds_variables=["TMP", "SPFH", "PRES", "UGRD", "VGRD", "DLWRF",
+                               "PEVAP", "APCP", "DSWRF"]):
+    """
+        Function for running moving (rolling) descriptive statistics on all netCDF files between a given range of dates.
+
+        Input
+        ----------
+        mean_ds : xarray of monthly mean ds_variables
+        median_ds : xarray of monthly median ds_variables
+        stddev_ds : xarray of monthly std dev ds_variables
+        max_ds : xarray of monthly max ds_variables
+        min_ds : xarray of monthly min ds_variables
+        ds_variables : List Variables to rename
+
+        Returns
+        -------
+        mean_df : xarray with string "_mean" added to each df variable
+        med_df : xarray with string "_med" added to each df variable
+        stddev_df : xarray with string "_std" added to each df variable
+        max_df : xarray with string "_max" added to each df variable
+        min_df : xarray with string "_min" added to each df variable
+
+        """
+
+    length = len(ds_variables)
+
+    for i in range(length):
+        mean_ds = mean_ds.rename({ds_variables[i]: f"{ds_variables[i]}_mean"})
+        median_ds = median_ds.rename({ds_variables[i]: f"{ds_variables[i]}_med"})
+        stddev_ds = stddev_ds.rename({ds_variables[i]: f"{ds_variables[i]}_std"})
+        max_ds = max_ds.rename({ds_variables[i]: f"{ds_variables[i]}_max"})
+        min_ds = min_ds.rename({ds_variables[i]: f"{ds_variables[i]}_min"})
+
+    return mean_ds, median_ds, stddev_ds, max_ds, min_ds
+
+
 # function for aggregating rolling stats on netCDF data
 
 def NLDASstats(input_path, output_path, start, stop,
@@ -39,7 +76,7 @@ def NLDASstats(input_path, output_path, start, stop,
     min_roll : DataSet netCDF file for storage of rolling minimums.
 
     """
-    global mean_df
+
     n = 0  # counter
 
     # create list of range of months to open
@@ -47,7 +84,6 @@ def NLDASstats(input_path, output_path, start, stop,
 
     # iterate through each month and create dataset
     for month in months:
-
         # create list of files in the given month in the range of months specified
         nc_files = sorted(glob(os.path.join(input_path, f"NLDAS_FORA0125_H.A*{month}*.002.grb.SUB.nc4")))
 
@@ -64,47 +100,12 @@ def NLDASstats(input_path, output_path, start, stop,
         max_ds = ds[ds_variables].max(dim="time", skipna=True)
         min_ds = ds[ds_variables].min(dim="time", skipna=True)
 
-        mean_df = mean_ds.rename(
-            {ds_variables[0]: f"{ds_variables[0]}_mean", ds_variables[1]: f"{ds_variables[1]}_mean",
-             ds_variables[2]: f"{ds_variables[2]}_mean", ds_variables[3]: f"{ds_variables[3]}_mean",
-             ds_variables[4]: f"{ds_variables[4]}_mean", ds_variables[5]: f"{ds_variables[5]}_mean",
-             ds_variables[6]: f"{ds_variables[6]}_mean", ds_variables[7]: f"{ds_variables[7]}_mean",
-             ds_variables[8]: f"{ds_variables[8]}_mean"})
-
-        max_df = max_ds.rename({ds_variables[0]: f"{ds_variables[0]}_max", ds_variables[1]: f"{ds_variables[1]}_max",
-                                ds_variables[2]: f"{ds_variables[2]}_max", ds_variables[3]: f"{ds_variables[3]}_max",
-                                ds_variables[4]: f"{ds_variables[4]}_max", ds_variables[5]: f"{ds_variables[5]}_max",
-                                ds_variables[6]: f"{ds_variables[6]}_max", ds_variables[7]: f"{ds_variables[7]}_max",
-                                ds_variables[8]: f"{ds_variables[8]}_max"})
-
-        min_df = min_ds.rename({ds_variables[0]: f"{ds_variables[0]}_min", ds_variables[1]: f"{ds_variables[1]}_min",
-                                ds_variables[2]: f"{ds_variables[2]}_min", ds_variables[3]: f"{ds_variables[3]}_min",
-                                ds_variables[4]: f"{ds_variables[4]}_min", ds_variables[5]: f"{ds_variables[5]}_min",
-                                ds_variables[6]: f"{ds_variables[6]}_min", ds_variables[7]: f"{ds_variables[7]}_min",
-                                ds_variables[8]: f"{ds_variables[8]}_min"})
-
-        med_df = median_ds.rename({ds_variables[0]: f"{ds_variables[0]}_med",
-                                   ds_variables[1]: f"{ds_variables[1]}_med",
-                                   ds_variables[2]: f"{ds_variables[2]}_med",
-                                   ds_variables[3]: f"{ds_variables[3]}_med",
-                                   ds_variables[4]: f"{ds_variables[4]}_med",
-                                   ds_variables[5]: f"{ds_variables[5]}_med",
-                                   ds_variables[6]: f"{ds_variables[6]}_med",
-                                   ds_variables[7]: f"{ds_variables[7]}_med",
-                                   ds_variables[8]: f"{ds_variables[8]}_med"})
-
-        std_dev_df = stddev_ds.rename({ds_variables[0]: f"{ds_variables[0]}_std",
-                                       ds_variables[1]: f"{ds_variables[1]}_std",
-                                       ds_variables[2]: f"{ds_variables[2]}_std",
-                                       ds_variables[3]: f"{ds_variables[3]}_std",
-                                       ds_variables[4]: f"{ds_variables[4]}_std",
-                                       ds_variables[5]: f"{ds_variables[5]}_std",
-                                       ds_variables[6]: f"{ds_variables[6]}_std",
-                                       ds_variables[7]: f"{ds_variables[7]}_std",
-                                       ds_variables[8]: f"{ds_variables[8]}_std"})
+        mean_df, med_df, stddev_df, max_df, min_df = rename_stats(mean_ds, median_ds, stddev_ds, max_ds, min_ds,
+                                                                  ds_variables=["TMP", "SPFH", "PRES", "UGRD", "VGRD",
+                                                                                "DLWRF", "PEVAP", "APCP", "DSWRF"])
 
         # concatenate stats
-        all_stats = xr.merge([mean_df, med_df, max_df, min_df, std_dev_df])
+        all_stats = xr.merge([mean_df, med_df, stddev_df, max_df, min_df])
 
         # get string for year
         year_dir = month[0:4]
@@ -133,7 +134,9 @@ def NLDASstats(input_path, output_path, start, stop,
 input_path = "/global/cfs/projectdirs/m2702/QAQC/NLDAS/NLDAS_input"
 output_path = "/global/cfs/projectdirs/m2702/QAQC/NLDAS/NLDAS_output"
 
+# local path
 input_path = "C:/Users/mcgr323/projects/wrf/nldas_input"
+output_path = "C:/Users/mcgr323/projects/wrf/nldas_output"
 
 start = "2007-01-01"
 stop = "2007-02-28"
