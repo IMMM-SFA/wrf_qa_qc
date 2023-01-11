@@ -102,11 +102,11 @@ def WRFstats(input_path, output_path, start, stop, descriptive=True, distributio
         # calculate statistical outliers
         if outliers == True:
             # outlier detection with IQR test
-            iqr_ds, q75_ds, q25_ds, upper_threshold, lower_threshold, outlier_upper, outlier_lower = IQR_Test(ds, ds_variables)
+            iqr_ds, q75_ds, q25_ds, upper_threshold, lower_threshold, outlier_upper, outlier_lower, outlier_upper_inv, outlier_lower_inv = IQR_Test(ds, ds_variables, iqr_threshold=3)
             iqr_outlier_df_dict = iqr_outlier_storage(ds, ds_variables, outlier_upper, outlier_lower, upper_threshold, lower_threshold)
             
             # outlier detection with Z-score test
-            zscore_ds, z_outlier_upper, z_outlier_lower, z_threshold = ZScore_Test(ds, ds_variables)
+            zscore_ds, z_outlier_upper, z_outlier_lower, z_outlier_upper_inv, z_outlier_lower_inv, z_threshold = ZScore_Test(ds, ds_variables, z_threshold=4)
             z_outlier_df_dict = z_outlier_storage(ds, ds_variables, zscore_ds, z_outlier_upper, z_outlier_lower, z_threshold)
             
         else:

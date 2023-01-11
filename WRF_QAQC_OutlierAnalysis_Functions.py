@@ -19,7 +19,10 @@ def IQR_Test(ds, ds_variables, iqr_threshold=1.5):
     outlier_upper = ds[ds_variables].where(ds[ds_variables] < (upper_threshold))
     outlier_lower = ds[ds_variables].where(ds[ds_variables] > (lower_threshold))
     
-    return iqr_ds, q75_ds, q25_ds, upper_threshold, lower_threshold, outlier_upper, outlier_lower
+    outlier_upper_inv = ds[ds_variables].where(ds[ds_variables] > (upper_threshold))
+    outlier_lower_inv = ds[ds_variables].where(ds[ds_variables] < (lower_threshold))
+    
+    return iqr_ds, q75_ds, q25_ds, upper_threshold, lower_threshold, outlier_upper, outlier_lower, outlier_upper_inv, outlier_lower_inv
 
 
 #%% z-score outlier test
@@ -46,8 +49,11 @@ def ZScore_Test(ds, ds_variables, z_threshold=3):
     
     z_outlier_upper = ds[ds_variables].where(zscore_ds[ds_variables] < z_threshold)
     z_outlier_lower = ds[ds_variables].where(zscore_ds[ds_variables] > -z_threshold)
+    
+    z_outlier_upper_inv = ds[ds_variables].where(zscore_ds[ds_variables] > z_threshold)
+    z_outlier_lower_inv = ds[ds_variables].where(zscore_ds[ds_variables] < -z_threshold)
         
-    return zscore_ds, z_outlier_upper, z_outlier_lower, z_threshold
+    return zscore_ds, z_outlier_upper, z_outlier_lower, z_outlier_upper_inv, z_outlier_lower_inv, z_threshold
 
 
 #%% pandas iqr outlier storage function
