@@ -3,8 +3,8 @@ import xarray as xr
 import salem as sl
 import os
 from glob import glob
-import salem as sl
 from datetime import datetime, timedelta
+from WRFstats_Functions import temp_conv, deacc_precip, windspeed, descriptive_stats
 
 
 #%% function for opening a variable range of data
@@ -26,15 +26,9 @@ def variable_range_data(input_path, start, stop):
     
     """
     
-    # find the starting year, month, and day
+    # find the starting and ending year
     startyear = start[0 : start.find("-")]
-    startmonth = start[start.find("-")+1 : start.rfind("-")]
-    startday = start[start.rfind("-")+1 :]
-    
-    # find the ending year, month, and day
     stopyear = stop[0 : stop.find("-")]
-    stopmonth = stop[stop.find("-")+1 : stop.rfind("-")]
-    stopday = stop[stop.rfind("-")+1 :]
     
     # collect all files for the years in the given range
     years = [str(int(startyear) + i) for i in range(int(stopyear) - int(startyear) + 1)]    
@@ -53,56 +47,6 @@ def variable_range_data(input_path, start, stop):
     rangefiles = [glob(os.path.join(input_path, f"wrfout_d01_*{date}*"))[0] for date in filedates if date in str(yearfiles)]
     
     return rangefiles
-
-
-#%% function for opening one month of data (DEPRECIATED - use variable_range_data())
- 
-def one_month_data(path, year, month):
-    
-    """
-    Function for opening one month of data including overlapping files. (DEPRECIATED - use variable_range_data())
-    
-    Input
-    ----------
-    path : Str Path to netCDF files for analysis.
-    year : Str Year of data for files to open.
-    month : Str Month of data for files to open.
-    
-    Returns
-    -------
-    onemonthdata : List of netCDF files in specified month and year.
-    
-    """
-    
-    # collect all files of a given month and year
-    monthdata = sorted(glob(os.path.join(path, f"wrfout_*{year}-{month}*")))
-    
-    # find the following and preceeding months and year
-    month_minus, year_minus = previous_file(year, month)
-    
-    # take the file that preceeds the specified month and add to collected files, return sorted list
-    last_month = sorted(glob(os.path.join(path, f"wrfout_*{year_minus}-{month_minus}*")))[-1]
-    monthdata.append(last_month)
-    onemonthdata = sorted(monthdata)
-    
-    return onemonthdata
-
-
-# function to find the previous file containing parts of the given month
-def previous_file(year, month):
-    
-    months_list = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"]
-    idx = months_list.index(month)
-    
-    month_minus = months_list[idx - 1] # get previous mnonth
-    
-    # if month is January, return previous year, else current year
-    if month == "01":
-        year_minus = str(int(year) - 1)
-    else:
-        year_minus = year
-    
-    return month_minus, year_minus
 
 
 #%% function for calculating rolling max and min
@@ -179,30 +123,6 @@ def WRFstddev(stddev, sample_size, stddev_roll, sample_size_roll, n):
         stddev_roll = np.sqrt( ( ((n1 - 1) * sd1**2) + ((n2 - 1) * sd2**2 ) ) / (n1 + n2 - 2) )
 
     return stddev_roll, sample_size_roll
-
-
-#%% function to combine and deaccumulate precipitation variables into new variable
-
-def deacc_precip(ds, ds_variables):
-    
-    # check if the variable PRECIP was included in the variables list, if so then create variable from rain variables and deaccumulate
-    if "PRECIP" in ds_variables:
-        ds["PRECIP"] = ds["RAINC"] + ds["RAINSH"] + ds["RAINNC"]
-        ds["PRECIP"].values = np.diff(ds["PRECIP"].values, axis = 0, prepend = np.array([ds["PRECIP"][0].values]))
-    
-    # deaccumulate rain variables
-    ds["RAINC"].values = np.diff(ds["RAINC"].values, axis = 0, prepend = np.array([ds["RAINC"][0].values]))
-    ds["RAINSH"].values = np.diff(ds["RAINSH"].values, axis = 0, prepend = np.array([ds["RAINSH"][0].values]))
-    ds["RAINNC"].values = np.diff(ds["RAINNC"].values, axis = 0, prepend = np.array([ds["RAINNC"][0].values]))
-
-
-#%% function for calculating magnitude of velocity vectors
-
-def magnitude(ds):
-    
-    U = ds["U10"]
-    V = ds["V10"]
-    ds["WINDSPEED"] = np.sqrt( U**2 + V**2 )
     
 
 #%% function for aggregating rolling stats on netCDF data
@@ -254,18 +174,17 @@ def WRFstats(input_path, output_path, start, stop,
         if file == nc_files[-1]:
             ds = ds.sel(time = slice(f"{stop}"))
         
-        # combine and deaccumulate precipitation variables into new variable
+        # convert T2 variable from K to F or C
+        temp_conv(ds, ds_variables)
+        
+        # combine and deaccumulate precipitation variables into PRECIP variable
         deacc_precip(ds, ds_variables)
         
-        # create new variable for wind speed from magnitudes of velocity vectors
-        magnitude(ds)
+        # create new variable WINDSPEED from magnitudes of velocity vectors
+        windspeed(ds, ds_variables)
         
         # calculate descriptive stats on file using xarray
-        mean = ds[ds_variables].mean(dim = "time", skipna = True)
-        stddev = ds[ds_variables].std(dim = "time", skipna = True)
-        avg_median = ds[ds_variables].median(dim = "time", skipna = True)
-        max = ds[ds_variables].max(dim = "time", skipna = True)
-        min = ds[ds_variables].min(dim = "time", skipna = True)
+        mean, avg_median, stddev, max, min = descriptive_stats(ds, ds_variables)
         sample_size = ds[ds_variables].count(dim = "time")
         
         # aggregate means using cumulative moving average method
@@ -279,8 +198,6 @@ def WRFstats(input_path, output_path, start, stop,
         
         # function for calculating rolling max and min
         max_roll, min_roll = WRFminmax(max, min, max_roll, min_roll, n)
-        
-        #TODO cumulative methods for median
         
         n += 1 # iterate counter
         
