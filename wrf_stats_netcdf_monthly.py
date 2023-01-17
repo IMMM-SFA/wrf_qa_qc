@@ -125,8 +125,8 @@ def WRFstats(input_path, output_path, start, stop, descriptive=True, distributio
         stats_combined = xr.merge(all_stats, SW_ds, normality, skew_ds, kurtosis_ds, q75_ds, q25_ds, iqr_ds,
                                   iqr_outlier_df_dict, zscore_ds, z_outlier_df_dict)
 
-        np.save(os.path.join(output_path, output_filename), stats_dict)
-        stats_list.append(stats_dict)
+        np.save(os.path.join(output_path, output_filename), stats_combined)
+        stats_list.append(stats_combined)
 
     return stats_list
 
