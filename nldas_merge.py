@@ -135,7 +135,7 @@ input_path = "/global/cfs/projectdirs/m2702/QAQC/NLDAS/NLDAS_input"
 output_path = "/global/cfs/projectdirs/m2702/QAQC/NLDAS/NLDAS_output"
 
 # local path
-input_path = "C:/Users/mcgr323/projects/wrf/nldas_input"
+input_path = "C:/Users/mcgr323/projects/wrf/nldas_input/"
 output_path = "C:/Users/mcgr323/projects/wrf/nldas_output"
 
 start = "2007-01-01"
