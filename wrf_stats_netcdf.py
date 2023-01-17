@@ -155,6 +155,7 @@ def descriptive_stats(ds, ds_variables):
 
     return all_stats
 
+
 # %% skew and kurtosis tests
 
 
@@ -234,23 +235,62 @@ def skew_kurtosis_test(ds, ds_variables):
 
     return skew_ds, kurtosis_ds
 
+
 # %% Shapiro-Wilks test function for normality
 
-def SW_func(ds_var):
+def rename_sw(sw_ds, normality_ds, ds_variables):
+    """
+    Function for renaming skew and kurtosis variables within the xarray
+
+    Input
+    ----------
+    sw_ds: xarray of Sharpio-Wilks test results for given ds_variables
+    normality_ds : xarray of normality vlaue for given ds_variables
+
+    Returns
+    -------
+    sw_ds: xarray with string "_sw" added to each df variable
+    normality_ds: xarray with string "_norm" added to each df variable
+    """
+
+    length = len(ds_variables)
+
+    for i in range(length):
+        sw_ds = sw_ds.rename({ds_variables[i]: f"{ds_variables[i]}_sw"})
+        normality_ds = normality_ds.rename({ds_variables[i]: f"{ds_variables[i]}_norm"})
+
+    return sw_ds, normality_ds
+
+
+def sw_func(ds_var):
     teststat, p = shapiro(ds_var)
 
     return np.array([[teststat, p]])
 
 
-def SW_Test(ds, ds_variables):
+def sw_test(ds, ds_variables):
+    """
+    Function for calculating Sharpio-Wilks test
+
+    Input
+    ----------
+    ds : xarray of raw data
+    ds_variables: list of variables within the df to perform stats on
+
+    Returns
+    -------
+    sw_ds : xarray of Sharpio-Wilks test for all given ds_variables
+    normality_ds : xarray of normality for all given ds_variables
+
+    """
+
     pval_list = []
     normality = {}
 
     for ds_var in ds_variables:
-        shapiro_test = xr.apply_ufunc(SW_func, ds[ds_var], input_core_dims=[["time"]], output_core_dims=[["output"]],
+        shapiro_test = xr.apply_ufunc(sw_func, ds[ds_var], input_core_dims=[["time"]], output_core_dims=[["output"]],
                                       vectorize=True, output_dtypes=[np.dtype("float32")])
 
-        teststat = shapiro_test.isel(output=0)
         p = shapiro_test.isel(output=1)
 
         pval_list.append(p)
@@ -258,6 +298,7 @@ def SW_Test(ds, ds_variables):
         percent_normal = (p.values > 0.05).sum() / (p.values >= 0).sum()
         normality[ds_var] = percent_normal
 
-    SW_ds = xr.merge(pval_list)
+    sw_ds = xr.merge(pval_list)
+    #sw_ds = rename_sw(sw_ds, ds_variables)
 
-    return SW_ds, normality
+    return sw_ds, normality

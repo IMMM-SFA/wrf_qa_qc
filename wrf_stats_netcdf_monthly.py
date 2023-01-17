@@ -4,7 +4,7 @@ import os
 import xarray as xr
 from glob import glob
 from wrf_stats_netcdf_monthly import temp_conv, deacc_precip, windspeed
-from wrf_stats_netcdf_monthly import descriptive_stats, SW_Test, skew_kurtosis_test
+from wrf_stats_netcdf_monthly import descriptive_stats, sw_test, skew_kurtosis_test
 
 
 # %% function to find the previous month containing parts of the given month
@@ -90,36 +90,17 @@ def WRFstats(input_path, output_path, start, stop, descriptive=True, distributio
         # calculate distribution stats on files using xarray
         if distribution == True:
             # Shapiro-Wilks test function for normality, gives percent of distributions that are normal
-            SW_ds, normality = SW_Test(ds, ds_variables)
+            sw_ds, normality = sw_test(ds, ds_variables)
 
             # skew and kurtosis tests
             skew_ds, kurtosis_ds = skew_kurtosis_test(ds, ds_variables)
 
         else:
-            SW_ds, normality, skew_ds, kurtosis_ds = (None,) * 4
-
-        # calculate statistical outliers
-        if outliers == True:
-            # outlier detection with IQR test
-            iqr_ds, q75_ds, q25_ds, upper_threshold, lower_threshold, outlier_upper, outlier_lower, outlier_upper_inv, outlier_lower_inv = IQR_Test(
-                ds, ds_variables, iqr_threshold=3)
-            iqr_outlier_df_dict = iqr_outlier_storage(ds, ds_variables, outlier_upper, outlier_lower, upper_threshold,
-                                                      lower_threshold)
-
-            # outlier detection with Z-score test
-            zscore_ds, z_outlier_upper, z_outlier_lower, z_outlier_upper_inv, z_outlier_lower_inv, z_threshold = ZScore_Test(
-                ds, ds_variables, z_threshold=4)
-            z_outlier_df_dict = z_outlier_storage(ds, ds_variables, zscore_ds, z_outlier_upper, z_outlier_lower,
-                                                  z_threshold)
-
-        else:
-            iqr_ds, q75_ds, q25_ds, outlier_upper, outlier_lower, iqr_outlier_df_dict = (None,) * 6
-            zscore_ds, z_outlier_upper, z_outlier_lower, z_threshold, z_outlier_df_dict = (None,) * 5
+            sw_ds, normality, skew_ds, kurtosis_ds = (None,) * 4
 
 
         # concatenate stats into dictionary and save as numpy dict
-        stats_combined = xr.merge(all_stats, SW_ds, normality, skew_ds, kurtosis_ds, q75_ds, q25_ds, iqr_ds,
-                                  iqr_outlier_df_dict, zscore_ds, z_outlier_df_dict)
+        stats_combined = xr.merge(all_stats, sw_ds, normality, skew_ds, kurtosis_ds)
 
         # get string for year
         year_dir = month[0:4]
