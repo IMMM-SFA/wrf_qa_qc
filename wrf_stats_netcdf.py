@@ -5,6 +5,21 @@ from scipy.stats import shapiro, kurtosis, skew
 
 # %% function to convert T2 variable from K to F or C
 def temp_conv(ds, ds_variables, F=True, C=True):
+    """
+    Function for converting Kelvin to Fahrenheit or Celsius
+
+    Input
+    ----------
+    ds : xarray of raw data
+    ds_variables: list of variables within the df to perform stats on
+    F: boolean Fahrenheit
+    C: boolean Celsius
+
+    Returns
+    -------
+    None
+
+    """
     if "T2" in ds_variables:
 
         K = ds["T2"]
@@ -22,6 +37,19 @@ def temp_conv(ds, ds_variables, F=True, C=True):
 
 # %% function to combine and deaccumulate precipitation variables into new variable
 def deacc_precip(ds, ds_variables):
+    """
+    Function for deaccumlating precipitation (only for TGW dataset)
+
+    Input
+    ----------
+    ds : xarray of raw data
+    ds_variables: list of variables within the df to perform stats on
+
+    Returns
+    -------
+    None
+
+    """
     # check if rain variables included in the variables list, if so then create PRECIP variable and deaccumulate
     if "RAINC" in ds_variables and "RAINSH" in ds_variables and "RAINNC" in ds_variables:
         ds["PRECIP"] = ds["RAINC"] + ds["RAINSH"] + ds["RAINNC"]
@@ -41,6 +69,19 @@ def deacc_precip(ds, ds_variables):
 
 # %% function for calculating magnitude of wind velocity vectors
 def windspeed(ds, ds_variables):
+    """
+    Function for calculating windspeed from U and V
+
+    Input
+    ----------
+    ds : xarray of raw data
+    ds_variables: list of variables within the df to perform stats on
+
+    Returns
+    -------
+    None
+
+    """
     if "U10" in ds_variables and "V10" in ds_variables:
         U = ds["U10"]
         V = ds["V10"]
@@ -52,7 +93,7 @@ def windspeed(ds, ds_variables):
 def rename_stats(mean_ds, median_ds, stddev_ds, max_ds, min_ds,
                  ds_variables):
     """
-        Function for running moving (rolling) descriptive statistics on all netCDF files between a given range of dates.
+        Function for renaming the xarray variables for mean, med, min, max and std dev
 
         Input
         ----------
@@ -88,6 +129,19 @@ def rename_stats(mean_ds, median_ds, stddev_ds, max_ds, min_ds,
 # %% calculate descriptive stats on file using xarray
 
 def descriptive_stats(ds, ds_variables):
+    """
+    Function for calculating mean, median, min, max, and std dev from raw data
+
+    Input
+    ----------
+    ds : xarray of raw data
+    ds_variables: list of variables within the df to perform stats on
+
+    Returns
+    -------
+    stats_all : xarray of combined varaibles with variables strings
+
+    """
     mean_ds = ds[ds_variables].mean(dim="time", skipna=True)
     median_ds = ds[ds_variables].median(dim="time", skipna=True)
     stddev_ds = ds[ds_variables].std(dim="time", skipna=True)
@@ -101,6 +155,84 @@ def descriptive_stats(ds, ds_variables):
 
     return all_stats
 
+# %% skew and kurtosis tests
+
+
+def rename_skew(skew_ds, kurtosis_ds, ds_variables):
+    """
+    Function for renaming skew and kurtosis variables within the xarray
+
+    Input
+    ----------
+    skew_ds : xarray of monthly skew ds_variables
+    kurtosis_ds : xarray of monthly kurtosis ds_variables
+
+    Returns
+    -------
+    skew_ds: xarray with string "_skew" added to each df variable
+    kurtosis_ds: xarray with string "_kurt" added to each df variable
+    """
+
+    length = len(ds_variables)
+
+    for i in range(length):
+        skew_ds = skew_ds.rename({ds_variables[i]: f"{ds_variables[i]}_skew"})
+        kurtosis_ds = kurtosis_ds.rename({ds_variables[i]: f"{ds_variables[i]}_kurt"})
+
+    return skew_ds, kurtosis_ds
+
+
+def skew_func(ds_var):
+    skewness = skew(ds_var, axis=0, nan_policy="omit")
+
+    return np.array([skewness])
+
+
+def kurtosis_func(ds_var):
+    kurtosisness = kurtosis(ds_var, axis=0, nan_policy="omit")
+
+    return np.array([kurtosisness])
+
+
+def skew_kurtosis_test(ds, ds_variables):
+    """
+    Function for calculating skew and kurtosis
+
+    Input
+    ----------
+    ds : xarray of raw data
+    ds_variables: list of variables within the df to perform stats on
+
+    Returns
+    -------
+    skew_ds : xarray of skew for all given ds_variables
+    kurtosis_ds : xarray of kurtosis for all given ds_variables
+
+    """
+
+    skew_list = []
+    kurt_list = []
+
+    for ds_var in ds_variables:
+        skew_test = xr.apply_ufunc(skew_func, ds[ds_var], input_core_dims=[["time"]], output_core_dims=[["output"]],
+                                   vectorize=True, output_dtypes=[np.dtype("float32")])
+
+        kurtosis_test = xr.apply_ufunc(kurtosis_func, ds[ds_var], input_core_dims=[["time"]],
+                                       output_core_dims=[["output"]],
+                                       vectorize=True, output_dtypes=[np.dtype("float32")])
+
+        skewness = skew_test.isel(output=0)
+        kurtosisness = kurtosis_test.isel(output=0)
+
+        skew_list.append(skewness)
+        kurt_list.append(kurtosisness)
+
+    skew_ds = xr.merge(skew_list)
+    kurtosis_ds = xr.merge(kurt_list)
+
+    skew_ds, kurtosis_ds = rename_skew(skew_ds, kurtosis_ds, ds_variables)
+
+    return skew_ds, kurtosis_ds
 
 # %% Shapiro-Wilks test function for normality
 
@@ -129,41 +261,3 @@ def SW_Test(ds, ds_variables):
     SW_ds = xr.merge(pval_list)
 
     return SW_ds, normality
-
-
-# %% skew and kurtosis tests
-
-def skew_func(ds_var):
-    skewness = skew(ds_var, axis=0, nan_policy="omit")
-
-    return np.array([skewness])
-
-
-def kurtosis_func(ds_var):
-    kurtosisness = kurtosis(ds_var, axis=0, nan_policy="omit")
-
-    return np.array([kurtosisness])
-
-
-def skew_kurtosis_test(ds, ds_variables):
-    skew_list = []
-    kurt_list = []
-
-    for ds_var in ds_variables:
-        skew_test = xr.apply_ufunc(skew_func, ds[ds_var], input_core_dims=[["time"]], output_core_dims=[["output"]],
-                                   vectorize=True, output_dtypes=[np.dtype("float32")])
-
-        kurtosis_test = xr.apply_ufunc(kurtosis_func, ds[ds_var], input_core_dims=[["time"]],
-                                       output_core_dims=[["output"]],
-                                       vectorize=True, output_dtypes=[np.dtype("float32")])
-
-        skewness = skew_test.isel(output=0)
-        kurtosisness = kurtosis_test.isel(output=0)
-
-        skew_list.append(skewness)
-        kurt_list.append(kurtosisness)
-
-    skew_ds = xr.merge(skew_list)
-    kurtosis_ds = xr.merge(kurt_list)
-
-    return skew_ds, kurtosis_ds

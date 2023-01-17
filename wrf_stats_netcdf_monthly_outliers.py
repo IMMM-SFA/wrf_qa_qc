@@ -4,7 +4,7 @@ import os
 import xarray as xr
 from glob import glob
 from wrf_stats_netcdf_monthly import temp_conv, deacc_precip, windspeed
-from wrf_stats_netcdf_monthly import descriptive_stats, SW_Test, skew_kurtosis_test
+from WRF_QAQC_OutlierAnalysis_Functions import IQR_Test, ZScore_Test, iqr_outlier_storage, z_outlier_storage
 
 
 # %% function to find the previous month containing parts of the given month
@@ -28,7 +28,7 @@ def previous_month(year_month):
 
 
 # %% function for calculating stats on monthly netCDF data
-def WRFstats(input_path, output_path, start, stop, descriptive=True, distribution=True, outliers=True,
+def WRFstats(input_path, output_path, start, stop, outliers=True,
              ds_variables=["LU_INDEX", "Q2", "T2", "PSFC", "U10", "V10", "SFROFF", "UDROFF", "ACSNOM", "SNOW", "SNOWH",
                            "WSPD", "BR",
                            "ZOL", "RAINC", "RAINSH", "RAINNC", "SNOWNC", "GRAUPELNC", "HAILNC", "SWDOWN", "GLW", "UST",
@@ -50,8 +50,6 @@ def WRFstats(input_path, output_path, start, stop, descriptive=True, distributio
     stats_list : List of datasets for storage of statistics output.
 
     """
-
-    stats_list = []
 
     # create list of range of months to open
     months = pd.date_range(start, stop, freq="MS").strftime("%Y-%m").tolist()
@@ -80,24 +78,6 @@ def WRFstats(input_path, output_path, start, stop, descriptive=True, distributio
         # create new variable WINDSPEED from magnitudes of velocity vectors
         windspeed(ds, ds_variables)
 
-        # calculate descriptive stats on files using xarray
-        if descriptive == True:
-            all_stats = descriptive_stats(ds, ds_variables)
-
-        else:
-            all_stats = (None,) * 5
-
-        # calculate distribution stats on files using xarray
-        if distribution == True:
-            # Shapiro-Wilks test function for normality, gives percent of distributions that are normal
-            SW_ds, normality = SW_Test(ds, ds_variables)
-
-            # skew and kurtosis tests
-            skew_ds, kurtosis_ds = skew_kurtosis_test(ds, ds_variables)
-
-        else:
-            SW_ds, normality, skew_ds, kurtosis_ds = (None,) * 4
-
         # calculate statistical outliers
         if outliers == True:
             # outlier detection with IQR test
@@ -116,10 +96,8 @@ def WRFstats(input_path, output_path, start, stop, descriptive=True, distributio
             iqr_ds, q75_ds, q25_ds, outlier_upper, outlier_lower, iqr_outlier_df_dict = (None,) * 6
             zscore_ds, z_outlier_upper, z_outlier_lower, z_threshold, z_outlier_df_dict = (None,) * 5
 
-
         # concatenate stats into dictionary and save as numpy dict
-        stats_combined = xr.merge(all_stats, SW_ds, normality, skew_ds, kurtosis_ds, q75_ds, q25_ds, iqr_ds,
-                                  iqr_outlier_df_dict, zscore_ds, z_outlier_df_dict)
+        stats_combined = xr.merge(q75_ds, q25_ds, iqr_ds, iqr_outlier_df_dict, zscore_ds, z_outlier_df_dict)
 
         # get string for year
         year_dir = month[0:4]
@@ -155,4 +133,3 @@ stop = "2007-12"
 
 # run the WRFstats program
 stats = WRFstats(input_path, output_path, start, stop)
-
