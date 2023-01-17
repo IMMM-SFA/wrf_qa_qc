@@ -102,13 +102,14 @@ def WRFstats(input_path, output_path, start, stop, descriptive=True, distributio
         # calculate statistical outliers
         if outliers == True:
             # outlier detection with IQR test
-            iqr_ds, q75_ds, q25_ds, upper_threshold, lower_threshold, outlier_upper, outlier_lower = IQR_Test(ds,
-                                                                                                              ds_variables)
+            iqr_ds, q75_ds, q25_ds, upper_threshold, lower_threshold, outlier_upper, outlier_lower, outlier_upper_inv, outlier_lower_inv = IQR_Test(
+                ds, ds_variables, iqr_threshold=3)
             iqr_outlier_df_dict = iqr_outlier_storage(ds, ds_variables, outlier_upper, outlier_lower, upper_threshold,
                                                       lower_threshold)
 
             # outlier detection with Z-score test
-            zscore_ds, z_outlier_upper, z_outlier_lower, z_threshold = ZScore_Test(ds, ds_variables)
+            zscore_ds, z_outlier_upper, z_outlier_lower, z_outlier_upper_inv, z_outlier_lower_inv, z_threshold = ZScore_Test(
+                ds, ds_variables, z_threshold=4)
             z_outlier_df_dict = z_outlier_storage(ds, ds_variables, zscore_ds, z_outlier_upper, z_outlier_lower,
                                                   z_threshold)
 
@@ -148,10 +149,12 @@ def WRFstats(input_path, output_path, start, stop, descriptive=True, distributio
 
 # specify the path to the location of the files to be analyzed,
 # the path for the output to be stored, and the start and stop dates
-input_path = "/project/projectdirs/m2702/gsharing/CONUS_TGW_WRF_Historical/"
-output_path = "/project/projectdirs/m2702/gsharing/QAQC/"
-start = "1989-01"
-stop = "1989-12"
+# input_path = "/project/projectdirs/m2702/gsharing/CONUS_TGW_WRF_Historical/"
+# output_path = "/project/projectdirs/m2702/gsharing/QAQC/"
+
+input_path = "C:/Users/mcgr323/projects/wrf/wrf_input/"
+start = "2006-12"
+stop = "2007-12"
 
 # run the WRFstats program
 stats = WRFstats(input_path, output_path, start, stop)

@@ -219,7 +219,7 @@ def WRFstats(input_path, output_path, start, stop,
 
 # specify the path to the location of the files to be analyzed,
 # the path for the output to be stored, and the start and stop dates
-input_path = "/project/projectdirs/m2702/gsharing/CONUS_TGW_WRF_Historical/"
+input_path = "/project/projectdirs/m2702/gsharing/tgw-wrf-conus/historic_1980_2019/hourly/"
 output_path = "/project/projectdirs/m2702/gsharing/QAQC/"
 start = "1999-01-01"
 stop = "1999-12-31"
