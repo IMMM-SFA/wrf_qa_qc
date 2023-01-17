@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import salem as sl
 import os
+import xarray as xr
 from glob import glob
 from WRFstats_Functions import temp_conv, deacc_precip, windspeed
 from WRFstats_Functions import descriptive_stats, SW_Test, skew_kurtosis_test
@@ -83,10 +84,10 @@ def WRFstats(input_path, output_path, start, stop, descriptive=True, distributio
 
         # calculate descriptive stats on files using xarray
         if descriptive == True:
-            mean_ds, median_ds, stddev_ds, max_ds, min_ds = descriptive_stats(ds, ds_variables)
+            all_stats = descriptive_stats(ds, ds_variables)
 
         else:
-            mean_ds, median_ds, stddev_ds, max_ds, min_ds = (None,) * 5
+            all_stats = (None,) * 5
 
         # calculate distribution stats on files using xarray
         if distribution == True:
@@ -121,23 +122,8 @@ def WRFstats(input_path, output_path, start, stop, descriptive=True, distributio
         output_filename = os.path.join(output_path + f"WRFstats_{month}.npy")
 
         # concatenate stats into dictionary and save as numpy dict
-        stats_dict = {
-            "Means": mean_ds,
-            "Medians": median_ds,
-            "Standard Deviation": stddev_ds,
-            "Max": max_ds,
-            "Min": min_ds,
-            "Shapiro-Wilks": SW_ds,
-            "% Normal": normality,
-            "Skew": skew_ds,
-            "Kurtosis": kurtosis_ds,
-            "Q75": q75_ds,
-            "Q25": q25_ds,
-            "IQR": iqr_ds,
-            "IQR Outliers": iqr_outlier_df_dict,
-            "Z-Scores": zscore_ds,
-            "Z-Score Outliers": z_outlier_df_dict
-        }
+        stats_combined = xr.merge(all_stats, SW_ds, normality, skew_ds, kurtosis_ds, q75_ds, q25_ds, iqr_ds,
+                                  iqr_outlier_df_dict, zscore_ds, z_outlier_df_dict)
 
         np.save(os.path.join(output_path, output_filename), stats_dict)
         stats_list.append(stats_dict)
