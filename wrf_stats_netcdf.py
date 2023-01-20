@@ -238,7 +238,7 @@ def skew_kurtosis_test(ds, ds_variables):
 
 # %% Shapiro-Wilks test function for normality
 
-def rename_sw(sw_ds, normality_ds, ds_variables):
+def rename_sw(sw_ds, ds_variables):
     """
     Function for renaming skew and kurtosis variables within the xarray
 
@@ -257,9 +257,10 @@ def rename_sw(sw_ds, normality_ds, ds_variables):
 
     for i in range(length):
         sw_ds = sw_ds.rename({ds_variables[i]: f"{ds_variables[i]}_sw"})
-        normality_ds = normality_ds.rename({ds_variables[i]: f"{ds_variables[i]}_norm"})
+        #normality_ds = normality_ds.rename({ds_variables[i]: f"{ds_variables[i]}_norm"})
+        normality = {f"{key}_norm":value for key,value in normality.items()}
 
-    return sw_ds, normality_ds
+    return sw_ds#, normality_ds
 
 
 def sw_func(ds_var):
@@ -299,6 +300,6 @@ def sw_test(ds, ds_variables):
         normality[ds_var] = percent_normal
 
     sw_ds = xr.merge(pval_list)
-    #sw_ds = rename_sw(sw_ds, ds_variables)
+    sw_ds = rename_sw(sw_ds, ds_variables)
 
     return sw_ds, normality

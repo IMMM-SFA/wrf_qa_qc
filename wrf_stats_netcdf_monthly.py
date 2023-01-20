@@ -100,7 +100,7 @@ def WRFstats(input_path, output_path, start, stop, descriptive=True, distributio
 
 
         # concatenate stats into dictionary and save as numpy dict
-        stats_combined = xr.merge(all_stats, sw_ds, normality, skew_ds, kurtosis_ds)
+        stats_combined = xr.merge([all_stats, sw_ds, skew_ds, normality, kurtosis_ds])
 
         # get string for year
         year_dir = month[0:4]
