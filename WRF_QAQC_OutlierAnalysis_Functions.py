@@ -3,7 +3,45 @@ import numpy as np
 import xarray as xr
 from scipy.stats import zscore
 
+# %% function to rename stats
+def rename_stats(iqr_ds, q75_ds, q25_ds, upper_threshold, lower_threshold, outlier_upper, outlier_lower, outlier_upper_inv,
+    outlier_lower_inv, ds_variables):
+    """
+        Function for renaming the xarray variables for mean, med, min, max and std dev
 
+        Input
+        ----------
+        mean_ds : xarray of monthly mean ds_variables
+        median_ds : xarray of monthly median ds_variables
+        stddev_ds : xarray of monthly std dev ds_variables
+        max_ds : xarray of monthly max ds_variables
+        min_ds : xarray of monthly min ds_variables
+        ds_variables : List Variables to rename
+
+        Returns
+        -------
+        mean_df : xarray with string "_mean" added to each df variable
+        med_df : xarray with string "_med" added to each df variable
+        stddev_df : xarray with string "_std" added to each df variable
+        max_df : xarray with string "_max" added to each df variable
+        min_df : xarray with string "_min" added to each df variable
+
+        """
+
+    length = len(ds_variables)
+
+    for i in range(length):
+        iqr_ds = iqr_ds.rename({ds_variables[i]: f"{ds_variables[i]}_iqr"})
+        q75_ds = q75_ds.rename({ds_variables[i]: f"{ds_variables[i]}_q75"})
+        upper_threshold = upper_threshold.rename({ds_variables[i]: f"{ds_variables[i]}_upper"})
+        lower_threshold = lower_threshold.rename({ds_variables[i]: f"{ds_variables[i]}_lower"})
+        outlier_upper = outlier_upper.rename({ds_variables[i]: f"{ds_variables[i]}_out_up"})
+        outlier_lower = outlier_lower.rename({ds_variables[i]: f"{ds_variables[i]}_out_low"})
+        outlier_upper_inv = outlier_upper_inv.rename({ds_variables[i]: f"{ds_variables[i]}_out_up_inv"})
+        outlier_lower_inv = outlier_lower_inv.rename({ds_variables[i]: f"{ds_variables[i]}_out_low_inv"})
+
+    return iqr_ds, q75_ds, q25_ds, upper_threshold, lower_threshold, outlier_upper, outlier_lower, outlier_upper_inv, \
+    outlier_lower_inv
 #%% outlier detection with IQR test
 
 def IQR_Test(ds, ds_variables, iqr_threshold=1.5):
@@ -21,8 +59,15 @@ def IQR_Test(ds, ds_variables, iqr_threshold=1.5):
     
     outlier_upper_inv = ds[ds_variables].where(ds[ds_variables] > (upper_threshold))
     outlier_lower_inv = ds[ds_variables].where(ds[ds_variables] < (lower_threshold))
+
+    iqr_ds, q75_ds, q25_ds, upper_threshold, lower_threshold, outlier_upper, outlier_lower, outlier_upper_inv, \
+    outlier_lower_inv = rename_stats(iqr_ds, q75_ds, q25_ds, upper_threshold, lower_threshold, outlier_upper,
+                                     outlier_lower, outlier_upper_inv, outlier_lower_inv, ds_variables)
+
+    all_outliers = xr.merge([iqr_ds, q75_ds, q25_ds, upper_threshold, lower_threshold, outlier_upper, outlier_lower, outlier_upper_inv, \
+    outlier_lower_inv], compat='override')
     
-    return iqr_ds, q75_ds, q25_ds, upper_threshold, lower_threshold, outlier_upper, outlier_lower, outlier_upper_inv, outlier_lower_inv
+    return all_outliers
 
 
 #%% z-score outlier test
