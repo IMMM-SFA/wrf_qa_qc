@@ -1,5 +1,10 @@
-import numpy as np
+import pandas as pd
+import salem as sl
+import os
 import xarray as xr
+import dask
+import numpy as np
+from glob import glob
 from scipy.stats import shapiro, kurtosis, skew
 
 
@@ -27,12 +32,12 @@ def temp_conv(ds, ds_variables, F=True, C=True):
         # convert to F
         if F == True:
             ds["T2F"] = 1.8 * (K - 273.15) + 32
-            ds_variables.append("T2F")
+            # ds_variables.append("T2F")
 
         # convert to C
         if C == True:
             ds["T2C"] = K - 273.15
-            ds_variables.append("T2C")
+            # ds_variables.append("T2C")
 
 
 # %% function to combine and deaccumulate precipitation variables into new variable
@@ -54,7 +59,7 @@ def deacc_precip(ds, ds_variables):
     if "RAINC" in ds_variables and "RAINSH" in ds_variables and "RAINNC" in ds_variables:
         ds["PRECIP"] = ds["RAINC"] + ds["RAINSH"] + ds["RAINNC"]
         ds["PRECIP"].values = np.diff(ds["PRECIP"].values, axis=0, prepend=np.array([ds["PRECIP"][0].values]))
-        ds_variables.append("PRECIP")
+        # ds_variables.append("PRECIP")
 
     # deaccumulate rain variables
     if "RAINC" in ds_variables:
@@ -86,7 +91,7 @@ def windspeed(ds, ds_variables):
         U = ds["U10"]
         V = ds["V10"]
         ds["WINDSPEED"] = np.sqrt(U ** 2 + V ** 2)
-        ds_variables.append("WINDSPEED")
+        # ds_variables.append("WINDSPEED")
 
 
 # %% function to rename stats
@@ -238,7 +243,7 @@ def skew_kurtosis_test(ds, ds_variables):
 
 # %% Shapiro-Wilks test function for normality
 
-def rename_sw(sw_ds, ds_variables):
+def rename_sw(sw_ds, ds_variables, normality):
     """
     Function for renaming skew and kurtosis variables within the xarray
 
@@ -257,10 +262,10 @@ def rename_sw(sw_ds, ds_variables):
 
     for i in range(length):
         sw_ds = sw_ds.rename({ds_variables[i]: f"{ds_variables[i]}_sw"})
-        #normality_ds = normality_ds.rename({ds_variables[i]: f"{ds_variables[i]}_norm"})
-        normality = {f"{key}_norm":value for key,value in normality.items()}
+        # normality_ds = normality_ds.rename({ds_variables[i]: f"{ds_variables[i]}_norm"})
+        normality = {f"{key}_norm": value for key, value in normality.items()}
 
-    return sw_ds#, normality_ds
+    return sw_ds, normality
 
 
 def sw_func(ds_var):
@@ -300,6 +305,132 @@ def sw_test(ds, ds_variables):
         normality[ds_var] = percent_normal
 
     sw_ds = xr.merge(pval_list)
-    sw_ds = rename_sw(sw_ds, ds_variables)
+    sw_ds, normality = rename_sw(sw_ds, ds_variables, normality)
 
     return sw_ds, normality
+
+
+# %% function to find the previous month containing parts of the given month
+def previous_month(year_month):
+    year = year_month[0: year_month.find("-")]
+    month = year_month[year_month.rfind("-") + 1:]
+
+    months_list = ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"]
+    idx = months_list.index(month)
+
+    month_minus = months_list[idx - 1]
+
+    if month == "01":
+        year_minus = str(int(year) - 1)
+    else:
+        year_minus = year
+
+    previousmonth = year_minus + "-" + month_minus
+
+    return previousmonth
+
+
+# %% function for calculating stats on monthly netCDF data
+def WRFstats(input_path, output_path, start, stop, descriptive=True, distribution=True,
+             ds_variables=None):
+    """
+    Function for calculating descriptive statistics and statistical outliers on monthly WRF netCDF data between a given range of months.
+
+    Input
+    ----------
+    input_path : Str Path to netCDF files for analysis.
+    output_path : Str Path for the output netCDF files to be stored.
+    start : Str "YYYY-MM" Start date of files to open.
+    stop : Str "YYYY-MM" End date of files to open (inclusive).
+    ds_variables : List Variables to run stats on.
+
+    Returns
+    -------
+    stats_list : List of datasets for storage of statistics output.
+
+    """
+    if ds_variables is None:
+        ds_variables = ["LU_INDEX", "Q2", "T2", "PSFC", "U10", "V10", "SFROFF", "UDROFF", "ACSNOM", "SNOW", "SNOWH",
+                        "WSPD", "BR", "ZOL", "RAINC", "RAINSH", "RAINNC", "SNOWNC", "GRAUPELNC", "HAILNC", "SWDOWN",
+                        "GLW", "UST",
+                        "SNOWC", "SR", 'T2F', 'T2C', 'PRECIP', 'WINDSPEED']
+
+    stats_list = []
+
+    # create list of range of months to open
+    months = pd.date_range(start, stop, freq="MS").strftime("%Y-%m").tolist()
+
+    # iterate through each month and create dataset
+    for month in months:
+
+        # create list of files in the given month in the range of months specified
+        nc_files = sorted(glob(os.path.join(input_path, f"tgw_wrf_historical_hourly_*{month}*")))
+
+        # find the previous month and take the last file of that month to extract any overlapping dates
+        previousmonth = previous_month(month)
+        previousmonth_lastfile = sorted(glob(os.path.join(input_path, f"tgw_wrf_historical_hourly_*{previousmonth}*")))[
+            -1]
+        nc_files.insert(0, previousmonth_lastfile)
+
+        ds = sl.open_mf_wrf_dataset(nc_files)  # open all netCDF files in month and create xarray dataset using salem
+        ds = ds.sel(time=slice(f"{month}"))  # slice by the current month
+        ds.load()  # load into memory for computations
+
+        # convert T2 variable from K to F or C
+        temp_conv(ds, ds_variables)
+
+        # combine and deaccumulate precipitation variables into PRECIP variable
+        deacc_precip(ds, ds_variables)
+
+        # create new variable WINDSPEED from magnitudes of velocity vectors
+        windspeed(ds, ds_variables)
+
+        # calculate descriptive stats on files using xarray
+        if descriptive == True:
+            all_stats = descriptive_stats(ds, ds_variables)
+
+        else:
+            all_stats = (None,) * 5
+
+        # calculate distribution stats on files using xarray
+        if distribution == True:
+            # Shapiro-Wilks test function for normality, gives percent of distributions that are normal
+            sw_ds, normality = sw_test(ds, ds_variables)
+
+            # skew and kurtosis tests
+            skew_ds, kurtosis_ds = skew_kurtosis_test(ds, ds_variables)
+
+        else:
+            sw_ds, normality, skew_ds, kurtosis_ds = (None,) * 4
+
+        # concatenate stats into dictionary and save as numpy dict
+        stats_combined = xr.merge([all_stats, sw_ds, skew_ds, normality, kurtosis_ds])
+
+        # get string for year
+        year_dir = month[0:4]
+
+        # create path for year
+        year_path = os.path.join(output_path, year_dir)
+
+        # checking if the directory demo_folder exist or not.
+        if not os.path.exists(year_path):
+            # if the demo_folder directory is not present create it
+            os.makedirs(year_path)
+
+        # specify the location for the output of the program
+        output_filename = os.path.join(year_path + "/" + f"tgw_wrf_hourly_{month}_all_stats.nc")
+
+        # save each output stat as a netCDF file
+        stats_combined.to_netcdf(path=output_filename)
+
+    return
+
+
+input_path = "/global/cfs/cdirs/m2702/gsharing/tgw-wrf-conus/historical_1980_2019/hourly/"
+output_path = "/global/cfs/projectdirs/m2702/gsharing/QAQC/"
+
+start = "2006-12"
+stop = "2007-12"
+
+# run the WRFstats program
+WRFstats(input_path, output_path, start, stop)
