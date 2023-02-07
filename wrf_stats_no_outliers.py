@@ -7,6 +7,7 @@ import numpy as np
 from glob import glob
 from scipy.stats import shapiro, kurtosis, skew
 
+import sys
 
 # %% function to convert T2 variable from K to F or C
 def temp_conv(ds, ds_variables, F=True, C=True):
@@ -425,12 +426,19 @@ def WRFstats(input_path, output_path, start, stop, descriptive=True, distributio
 
     return
 
+if __name__ == "__main__":
 
-input_path = "/global/cfs/cdirs/m2702/gsharing/tgw-wrf-conus/historical_1980_2019/hourly/"
-output_path = "/global/cfs/projectdirs/m2702/gsharing/QAQC/"
+    input_path = "/global/cfs/cdirs/m2702/gsharing/tgw-wrf-conus/historical_1980_2019/hourly/"
+    output_path = "/global/cfs/projectdirs/m2702/gsharing/QAQC/"
+    
+    if len(sys.argv > 1):
+        year = sys.argv[1]
+        start = f'{year}-01'
+        stop = f'{year}-12'
+    
+    else:
+        start = "2007-01"
+        stop = "2007-12"
 
-start = "2006-12"
-stop = "2007-12"
-
-# run the WRFstats program
-WRFstats(input_path, output_path, start, stop)
+    # run the WRFstats program
+    WRFstats(input_path, output_path, start, stop)
