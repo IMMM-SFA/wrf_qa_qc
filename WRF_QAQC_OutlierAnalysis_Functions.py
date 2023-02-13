@@ -5,7 +5,6 @@ from scipy.stats import zscore
 
 
 #%% outlier detection with IQR test
-
 def IQR_Test(ds, ds_variables, iqr_threshold=1.5):
     
     q75_ds = ds[ds_variables].quantile(q = 0.75, dim = "time", skipna = "True").astype("float32")
@@ -13,20 +12,16 @@ def IQR_Test(ds, ds_variables, iqr_threshold=1.5):
     
     iqr_ds = q75_ds - q25_ds
     IQR_val = iqr_threshold * iqr_ds
-    upper_threshold = q75_ds + IQR_val
-    lower_threshold = q25_ds - IQR_val
+    iqr_upper_threshold = q75_ds + IQR_val
+    iqr_lower_threshold = q25_ds - IQR_val
     
-    outlier_upper = ds[ds_variables].where(ds[ds_variables] < (upper_threshold))
-    outlier_lower = ds[ds_variables].where(ds[ds_variables] > (lower_threshold))
+    iqr_outlier_upper = ds[ds_variables].where(ds[ds_variables] > (iqr_upper_threshold))
+    iqr_outlier_lower = ds[ds_variables].where(ds[ds_variables] < (iqr_lower_threshold))
     
-    outlier_upper_inv = ds[ds_variables].where(ds[ds_variables] > (upper_threshold))
-    outlier_lower_inv = ds[ds_variables].where(ds[ds_variables] < (lower_threshold))
-    
-    return iqr_ds, q75_ds, q25_ds, upper_threshold, lower_threshold, outlier_upper, outlier_lower, outlier_upper_inv, outlier_lower_inv
+    return iqr_ds, q75_ds, q25_ds, iqr_upper_threshold, iqr_lower_threshold, iqr_outlier_upper, iqr_outlier_lower
 
 
 #%% z-score outlier test
-        
 def ZScore_Test(ds, ds_variables, z_threshold=3):
     
     def ZS_func(ds_var):
@@ -47,21 +42,17 @@ def ZScore_Test(ds, ds_variables, z_threshold=3):
 
     zscore_ds = xr.merge(z_list)
     
-    z_outlier_upper = ds[ds_variables].where(zscore_ds[ds_variables] < z_threshold)
-    z_outlier_lower = ds[ds_variables].where(zscore_ds[ds_variables] > -z_threshold)
-    
-    z_outlier_upper_inv = ds[ds_variables].where(zscore_ds[ds_variables] > z_threshold)
-    z_outlier_lower_inv = ds[ds_variables].where(zscore_ds[ds_variables] < -z_threshold)
+    z_outlier_upper = ds[ds_variables].where(zscore_ds[ds_variables] > z_threshold)
+    z_outlier_lower = ds[ds_variables].where(zscore_ds[ds_variables] < -z_threshold)
         
-    return zscore_ds, z_outlier_upper, z_outlier_lower, z_outlier_upper_inv, z_outlier_lower_inv, z_threshold
+    return zscore_ds, z_outlier_upper, z_outlier_lower, z_threshold
 
 
 #%% pandas iqr outlier storage function
-
-def iqr_outlier_storage(ds, ds_variables, outlier_upper, outlier_lower, upper_threshold, lower_threshold):
+def iqr_outlier_storage(ds, ds_variables, iqr_outlier_upper, iqr_outlier_lower, iqr_upper_threshold, iqr_lower_threshold):
     
-    outlier_upper_dict = {i: np.where(outlier_upper[i].isnull()) for i in ds_variables}
-    outlier_lower_dict = {i: np.where(outlier_lower[i].isnull()) for i in ds_variables}
+    outlier_upper_dict = {i: np.where(iqr_outlier_upper[i].notnull()) for i in ds_variables}
+    outlier_lower_dict = {i: np.where(iqr_outlier_lower[i].notnull()) for i in ds_variables}
     
     iqr_outlier_df_list = []
     
@@ -71,14 +62,14 @@ def iqr_outlier_storage(ds, ds_variables, outlier_upper, outlier_lower, upper_th
         time_upper_outliers = ds[var].time[tuple(outlier_upper_dict[var])[0]]
         lat_upper_outliers = ds[var].south_north[tuple(outlier_upper_dict[var])[1]]
         lon_upper_outliers = ds[var].west_east[tuple(outlier_upper_dict[var])[2]]
-        q75_upper = upper_threshold[var].values[tuple(outlier_upper_dict[var])[1:]]
+        q75_upper = iqr_upper_threshold[var].values[tuple(outlier_upper_dict[var])[1:]]
         diffq75_upper_outliers = val_upper_outliers - q75_upper
         
         val_lower_outliers = ds[var].values[tuple(outlier_lower_dict[var])]
         time_lower_outliers = ds[var].time[tuple(outlier_lower_dict[var])[0]]
         lat_lower_outliers = ds[var].south_north[tuple(outlier_lower_dict[var])[1]]
         lon_lower_outliers = ds[var].west_east[tuple(outlier_lower_dict[var])[2]]
-        q25_lower = lower_threshold[var].values[tuple(outlier_lower_dict[var])[1:]]
+        q25_lower = iqr_lower_threshold[var].values[tuple(outlier_lower_dict[var])[1:]]
         diffq25_lower_outliers = q25_lower - val_lower_outliers
         
         time_upper_list = list(time_upper_outliers.values)
@@ -127,11 +118,10 @@ def iqr_outlier_storage(ds, ds_variables, outlier_upper, outlier_lower, upper_th
 
 
 #%% pandas z outlier storage function
-
 def z_outlier_storage(ds, ds_variables, zscore_ds, z_outlier_upper, z_outlier_lower, z_threshold):
     
-    z_outlier_upper_dict = {i: np.where(z_outlier_upper[i].isnull()) for i in ds_variables}
-    z_outlier_lower_dict = {i: np.where(z_outlier_lower[i].isnull()) for i in ds_variables}
+    z_outlier_upper_dict = {i: np.where(z_outlier_upper[i].notnull()) for i in ds_variables}
+    z_outlier_lower_dict = {i: np.where(z_outlier_lower[i].notnull()) for i in ds_variables}
     
     z_outlier_df_list = []
     
@@ -208,4 +198,5 @@ def z_outlier_storage(ds, ds_variables, zscore_ds, z_outlier_upper, z_outlier_lo
     z_outlier_df_dict = {ds_variables[i]: z_outlier_df_list[i] for i in range(len(ds_variables))}
         
     return z_outlier_df_dict
+
 

@@ -53,7 +53,6 @@ def windspeed(ds, ds_variables):
         
 
 #%% calculate descriptive stats on file using xarray
-
 def descriptive_stats(ds, ds_variables):
 
     mean_ds = ds[ds_variables].mean(dim = "time", skipna = True)
@@ -66,7 +65,6 @@ def descriptive_stats(ds, ds_variables):
 
 
 #%% Shapiro-Wilks test function for normality
-
 def SW_func(ds_var):
     
     teststat, p = shapiro(ds_var)
@@ -97,7 +95,6 @@ def SW_Test(ds, ds_variables):
 
 
 #%% skew and kurtosis tests
-
 def skew_func(ds_var):
     
     skewness = skew(ds_var, axis = 0, nan_policy = "omit")

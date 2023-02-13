@@ -6,6 +6,8 @@ from glob import glob
 from WRFstats_Functions import temp_conv, deacc_precip, windspeed
 from WRFstats_Functions import descriptive_stats, SW_Test, skew_kurtosis_test
 from WRF_QAQC_OutlierAnalysis_Functions import IQR_Test, ZScore_Test, iqr_outlier_storage, z_outlier_storage
+from WRF_QAQC_Anomalies_Functions import has_sunlight, find_LAN_NLAD, find_zeros, find_negatives, rel_humidity, rh_over100
+from WRF_QAQC_Anomalies_Functions import LAN_NLAD_storage, zeros_storage, negatives_storage, RH_storage
 
 
 #%% function to find the previous month containing parts of the given month
@@ -30,7 +32,7 @@ def previous_month(year_month):
 
 
 #%% function for calculating stats on monthly netCDF data
-def WRFstats(input_path, output_path, start, stop, descriptive=True, distribution=True, outliers=True,
+def WRFstats(input_path, output_path, start, stop, descriptive=True, distribution=True, outliers=True, anomalies=True,
              ds_variables=["LU_INDEX","Q2","T2","PSFC","U10","V10","SFROFF","UDROFF","ACSNOM","SNOW","SNOWH","WSPD","BR",
                            "ZOL","RAINC","RAINSH","RAINNC","SNOWNC","GRAUPELNC","HAILNC","SWDOWN","GLW","UST","SNOWC","SR"]
              ):
@@ -81,6 +83,9 @@ def WRFstats(input_path, output_path, start, stop, descriptive=True, distributio
         # create new variable WINDSPEED from magnitudes of velocity vectors
         windspeed(ds, ds_variables)
         
+        # calculate relative humidity and create new variable RH
+        rel_humidity(ds, ds_variables)
+        
         # calculate descriptive stats on files using xarray
         if descriptive == True:
             mean_ds, median_ds, stddev_ds, max_ds, min_ds = descriptive_stats(ds, ds_variables)
@@ -101,17 +106,39 @@ def WRFstats(input_path, output_path, start, stop, descriptive=True, distributio
         
         # calculate statistical outliers
         if outliers == True:
-            # outlier detection with IQR test
-            iqr_ds, q75_ds, q25_ds, upper_threshold, lower_threshold, outlier_upper, outlier_lower, outlier_upper_inv, outlier_lower_inv = IQR_Test(ds, ds_variables, iqr_threshold=3)
-            iqr_outlier_df_dict = iqr_outlier_storage(ds, ds_variables, outlier_upper, outlier_lower, upper_threshold, lower_threshold)
+            # outlier detection with IQR test, adjusted for extreme outliers
+            iqr_ds, q75_ds, q25_ds, iqr_upper_threshold, iqr_lower_threshold, iqr_outlier_upper, iqr_outlier_lower = IQR_Test(ds, ds_variables, iqr_threshold=3)
+            iqr_outlier_df_dict = iqr_outlier_storage(ds, ds_variables, iqr_outlier_upper, iqr_outlier_lower, iqr_upper_threshold, iqr_lower_threshold)
             
-            # outlier detection with Z-score test
-            zscore_ds, z_outlier_upper, z_outlier_lower, z_outlier_upper_inv, z_outlier_lower_inv, z_threshold = ZScore_Test(ds, ds_variables, z_threshold=4)
+            # outlier detection with Z-score test, adjusted for extreme outliers
+            zscore_ds, z_outlier_upper, z_outlier_lower, z_threshold = ZScore_Test(ds, ds_variables, z_threshold=4)
             z_outlier_df_dict = z_outlier_storage(ds, ds_variables, zscore_ds, z_outlier_upper, z_outlier_lower, z_threshold)
             
         else:
             iqr_ds, q75_ds, q25_ds, outlier_upper, outlier_lower, iqr_outlier_df_dict = (None,)*6
             zscore_ds, z_outlier_upper, z_outlier_lower, z_threshold, z_outlier_df_dict = (None,)*5
+        
+        # find specific anomalies in the dataset
+        if anomalies == True:
+            # find where relative humidity exceeds 100% by specified threshold
+            rh_over100_ds = rh_over100(ds, ds_variables, RH_threshold=1.15)
+            RH_df_dict = RH_storage(ds, ds_variables, rh_over100_ds)
+            
+            # calculate dusk/dawn times and find occurrences of light at night (LAN) and no light at day (NLAD)
+            LAN, NLAD, has_light = find_LAN_NLAD(ds, ds_variables)
+            LAN_NLAD_df_dict = LAN_NLAD_storage(ds, ds_variables, LAN, NLAD, has_light)
+            
+            # find occurrences of zero where they should not occur
+            zeros_ds, vars = find_zeros(ds, ds_variables)
+            zeros_df_dict = zeros_storage(ds, zeros_ds, vars)
+            
+            # find occurrences of negatives where they should not occur
+            negatives_ds, vars = find_negatives(ds, ds_variables)
+            negatives_df_dict = negatives_storage(ds, negatives_ds, vars)
+        
+        else:
+            rh_over100_ds, LAN, NLAD, zeros_ds, negatives_ds = (None,)*5
+            RH_df_dict, LAN_NLAD_df_dict, zeros_df_dict, negatives_df_dict = (None,)*4
         
         # specify the location for the output of the program
         output_filename = os.path.join(output_path + f"WRFstats_{month}.npy")
@@ -132,10 +159,13 @@ def WRFstats(input_path, output_path, start, stop, descriptive=True, distributio
                       "IQR": iqr_ds,
                       "IQR Outliers": iqr_outlier_df_dict,
                       "Z-Scores": zscore_ds,
-                      "Z-Score Outliers": z_outlier_df_dict
+                      "Z-Score Outliers": z_outlier_df_dict,
+                      "Rel Humidity Over 100%": RH_df_dict,
+                      "LAN/NLAD": LAN_NLAD_df_dict,
+                      "Zeros": zeros_df_dict,
+                      "Negatives": negatives_df_dict
                       }
         
-        np.save(os.path.join(output_path, output_filename), stats_dict)
         stats_list.append(stats_dict)
     
     
@@ -146,7 +176,7 @@ def WRFstats(input_path, output_path, start, stop, descriptive=True, distributio
 
 # specify the path to the location of the files to be analyzed,
 # the path for the output to be stored, and the start and stop dates
-input_path = "/project/projectdirs/m2702/gsharing/CONUS_TGW_WRF_Historical/"
+input_path = "/project/projectdirs/m2702/gsharing/tgw-wrf-conus/historic_1980_2019/hourly/"
 output_path = "/project/projectdirs/m2702/gsharing/QAQC/"
 start = "1989-01"
 stop = "1989-12"
