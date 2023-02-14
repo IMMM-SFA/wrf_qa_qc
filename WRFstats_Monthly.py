@@ -76,7 +76,7 @@ def WRFstats(input_path, output_path, start, stop, descriptive=True, distributio
         
         ds = sl.open_mf_wrf_dataset(nc_files) # open all netCDF files in month and create xarray dataset using salem
         ds["time"] = np.sort(ds["time"].values) # resort timestamps in dataset
-        ds = ds.sel(time = slice(dt64[i], dt64[i+1]-1)) # slice by the current month and stop before next month
+        ds = ds.sel(time = slice(dt64[i], dt64[i+1])) # slice by the current month and stop at next month
         ds.load() # load into memory for computations
         
         # convert T2 variable from K to F or C
