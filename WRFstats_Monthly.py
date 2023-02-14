@@ -44,8 +44,8 @@ def WRFstats(input_path, output_path, start, stop, descriptive=True, distributio
     ----------
     input_path : Str Path to netCDF files for analysis.
     output_path : Str Path for the output netCDF files to be stored.
-    start : Str "YYYY-MM" Start date of files to open.
-    stop : Str "YYYY-MM" End date of files to open (inclusive).
+    start : Str "YYYY-MM" Start date of files to open. (inclusive)
+    stop : Str "YYYY-MM" End date of files to open (NOT inclusive).
     ds_variables : List Variables to run stats on.
         
     Returns
@@ -58,20 +58,25 @@ def WRFstats(input_path, output_path, start, stop, descriptive=True, distributio
     
     # create list of range of months to open
     months = pd.date_range(start, stop, freq="MS").strftime("%Y-%m").tolist()
+    dt64 = [np.datetime64(m, "ns") for m in months] # convert months to datetime64[ns]
     
     # iterate through each month and create dataset
-    for month in months:
+    for i, month in enumerate(months[:-1]):
         
         # create list of files in the given month in the range of months specified
         nc_files = sorted(glob(os.path.join(input_path, f"wrfout_d01_*{month}*")))
         
-        # find the previous month and take the last file of that month to extract any overlapping dates
-        previousmonth = previous_month(month)
-        previousmonth_lastfile = sorted(glob(os.path.join(input_path, f"wrfout_d01_*{previousmonth}*")))[-1]
-        nc_files.insert(0, previousmonth_lastfile)
+        # find the previous month and take the last file of that month to extract any overlapping dates, if it exists
+        try:
+            previousmonth = previous_month(month)
+            previousmonth_lastfile = sorted(glob(os.path.join(input_path, f"wrfout_d01_*{previousmonth}*")))[-1]
+            nc_files.insert(0, previousmonth_lastfile)
+        except:
+            pass
         
         ds = sl.open_mf_wrf_dataset(nc_files) # open all netCDF files in month and create xarray dataset using salem
-        ds = ds.sel(time = slice(f"{month}")) # slice by the current month
+        ds["time"] = np.sort(ds["time"].values) # resort timestamps in dataset
+        ds = ds.sel(time = slice(dt64[i], dt64[i+1]-1)) # slice by the current month and stop before next month
         ds.load() # load into memory for computations
         
         # convert T2 variable from K to F or C
@@ -176,11 +181,11 @@ def WRFstats(input_path, output_path, start, stop, descriptive=True, distributio
 
 # specify the path to the location of the files to be analyzed,
 # the path for the output to be stored, and the start and stop dates
-input_path = "/project/projectdirs/m2702/gsharing/tgw-wrf-conus/historic_1980_2019/hourly/"
-output_path = "/project/projectdirs/m2702/gsharing/QAQC/"
-start = "1989-01"
-stop = "1989-12"
+input_path = "/global/cfs/cdirs/m2702/gsharing/tgw-wrf-conus/historical_1980_2019/hourly/" # netCDF file location
+output_path = "/global/cfs/projectdirs/m2702/gsharing/QAQC/" # location to store outputs
+start = "2000-01" # inclusive
+stop = "2001-01" # NOT inclusive
 
 # run the WRFstats program
-stats = WRFstats(input_path, output_path, start, stop)
+stats = WRFstats(input_path, output_path, start, stop) # adjust defaults to customize analysis
 
