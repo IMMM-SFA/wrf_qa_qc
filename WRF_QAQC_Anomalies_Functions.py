@@ -174,7 +174,7 @@ def zeros_storage(ds, zeros_ds, vars):
 #%% find negatives
 def find_negatives(ds, ds_variables,
                checklist = ["LU_INDEX","T2","PSFC","SFROFF","UDROFF","ACSNOM","SNOW","SNOWH",
-                             "RAINC","RAINSH","RAINNC","SNOWNC","GRAUPELNC","HAILNC","SWDOWN", "RH"]):
+                             "RAINC","RAINSH","RAINNC","SNOWNC","GRAUPELNC","HAILNC","SWDOWN"]):
     
     vars = [checklist[i] for i in range(len(checklist)) if checklist[i] in ds_variables]
     
@@ -220,7 +220,7 @@ def negatives_storage(ds, negatives_ds, vars):
     return negatives_df_dict
 
 
-#%% calculate relative humidity and return where rh over 100%
+#%% calculate relative humidity and return where rh over 100% or negative
 # expect rh to be between 0 and 1, but small deviations above 1 are allowed
 def rel_humidity(ds, ds_variables):
     
@@ -234,42 +234,61 @@ def rel_humidity(ds, ds_variables):
         ds_variables.append("RH")
 
 
-def rh_over100(ds, ds_variables, RH_threshold=1.15):
+def rh_anomaly(ds, ds_variables, RH_threshold=1.15, RH_threshold_neg=-0.015):
     
     if "RH" in ds_variables:
         
         rh_over100_ds = ds["RH"].where(ds["RH"] > RH_threshold)
+        rh_negative_ds = ds["RH"].where(ds["RH"] < RH_threshold_neg)
         
-        return rh_over100_ds
+        return rh_over100_ds, rh_negative_ds
 
 
-def RH_storage(ds, ds_variables, rh_over100_ds):
+def RH_storage(ds, ds_variables, rh_over100_ds, rh_negative_ds):
     
     if "RH" in ds_variables:
     
-        RH_dict = {"RH": np.where(rh_over100_ds.notnull())}
+        RH_over100_dict = {"RH_Over100": np.where(rh_over100_ds.notnull())}
+        RH_negative_dict = {"RH_Negative": np.where(rh_negative_ds.notnull())}
             
-        val_RH = ds["RH"].values[tuple(RH_dict["RH"])]
-        time_RH = ds["RH"].time[tuple(RH_dict["RH"])[0]]
-        lat_RH = ds["RH"].south_north[tuple(RH_dict["RH"])[1]]
-        lon_RH = ds["RH"].west_east[tuple(RH_dict["RH"])[2]]
+        val_RH_Over100 = ds["RH"].values[tuple(RH_over100_dict["RH_Over100"])]
+        time_RH_Over100 = ds["RH"].time[tuple(RH_over100_dict["RH_Over100"])[0]]
+        lat_RH_Over100 = ds["RH"].south_north[tuple(RH_over100_dict["RH_Over100"])[1]]
+        lon_RH_Over100 = ds["RH"].west_east[tuple(RH_over100_dict["RH_Over100"])[2]]
         
-        time_list = list(time_RH.values)
-        lat_list = list(lat_RH.values)
-        lon_list = list(lon_RH.values)
-        val_list = list(val_RH)
+        val_RH_Negative = ds["RH"].values[tuple(RH_negative_dict["RH_Negative"])]
+        time_RH_Negative = ds["RH"].time[tuple(RH_negative_dict["RH_Negative"])[0]]
+        lat_RH_Negative = ds["RH"].south_north[tuple(RH_negative_dict["RH_Negative"])[1]]
+        lon_RH_Negative = ds["RH"].west_east[tuple(RH_negative_dict["RH_Negative"])[2]]
         
-        dict = {"Time": [], "Lat": [], "Lon": [], "Value": []}
+        RH_Over100_time_list = list(time_RH_Over100.values)
+        RH_Over100_lat_list = list(lat_RH_Over100.values)
+        RH_Over100_lon_list = list(lon_RH_Over100.values)
+        RH_Over100_val_list = list(val_RH_Over100)
         
-        for i in range(len(val_list)):
-            dict["Time"].append(time_list[i])
-            dict["Lat"].append(lat_list[i])
-            dict["Lon"].append(lon_list[i])
-            dict["Value"].append(val_list[i])
+        RH_Negative_time_list = list(time_RH_Negative.values)
+        RH_Negative_lat_list = list(lat_RH_Negative.values)
+        RH_Negative_lon_list = list(lon_RH_Negative.values)
+        RH_Negative_val_list = list(val_RH_Negative)
         
-        RH_df = pd.DataFrame(dict)
+        RH_Over100_dict = {"Time": [], "Lat": [], "Lon": [], "Value": []}        
+        for i in range(len(RH_Over100_val_list)):
+            RH_Over100_dict["Time"].append(RH_Over100_time_list[i])
+            RH_Over100_dict["Lat"].append(RH_Over100_lat_list[i])
+            RH_Over100_dict["Lon"].append(RH_Over100_lon_list[i])
+            RH_Over100_dict["Value"].append(RH_Over100_val_list[i])
+        
+        RH_Negative_dict = {"Time": [], "Lat": [], "Lon": [], "Value": []}
+        for i in range(len(RH_Negative_val_list)):
+            RH_Negative_dict["Time"].append(RH_Negative_time_list[i])
+            RH_Negative_dict["Lat"].append(RH_Negative_lat_list[i])
+            RH_Negative_dict["Lon"].append(RH_Negative_lon_list[i])
+            RH_Negative_dict["Value"].append(RH_Negative_val_list[i])
+        
+        RH_Over100_df = pd.DataFrame(RH_Over100_dict)
+        RH_Negative_df = pd.DataFrame(RH_Negative_dict)
             
-        RH_df_dict = {"RH": RH_df}
+        RH_anomaly_df_dict = {"RH_Over100": RH_Over100_df, "RH_Negative": RH_Negative_df}
         
-        return RH_df_dict
+        return RH_anomaly_df_dict
 

@@ -6,7 +6,7 @@ from glob import glob
 from WRFstats_Functions import temp_conv, deacc_precip, windspeed
 from WRFstats_Functions import descriptive_stats, SW_Test, skew_kurtosis_test
 from WRF_QAQC_OutlierAnalysis_Functions import IQR_Test, ZScore_Test, iqr_outlier_storage, z_outlier_storage
-from WRF_QAQC_Anomalies_Functions import has_sunlight, find_LAN_NLAD, find_zeros, find_negatives, rel_humidity, rh_over100
+from WRF_QAQC_Anomalies_Functions import find_LAN_NLAD, find_zeros, find_negatives, rel_humidity, rh_anomaly
 from WRF_QAQC_Anomalies_Functions import LAN_NLAD_storage, zeros_storage, negatives_storage, RH_storage
 
 
@@ -76,7 +76,7 @@ def WRFstats(input_path, output_path, start, stop, descriptive=True, distributio
         
         ds = sl.open_mf_wrf_dataset(nc_files) # open all netCDF files in month and create xarray dataset using salem
         ds["time"] = np.sort(ds["time"].values) # resort timestamps in dataset
-        ds = ds.sel(time = slice(dt64[i], dt64[i+1]-1)) # slice by the current month and stop before next month
+        ds = ds.sel(time = slice(dt64[i], dt64[i+1])) # slice by the current month and stop at next month
         ds.load() # load into memory for computations
         
         # convert T2 variable from K to F or C
@@ -125,9 +125,9 @@ def WRFstats(input_path, output_path, start, stop, descriptive=True, distributio
         
         # find specific anomalies in the dataset
         if anomalies == True:
-            # find where relative humidity exceeds 100% by specified threshold
-            rh_over100_ds = rh_over100(ds, ds_variables, RH_threshold=1.15)
-            RH_df_dict = RH_storage(ds, ds_variables, rh_over100_ds)
+            # find where relative humidity is over 100% or negative by specified threshold
+            rh_over100_ds, rh_negative_ds = rh_anomaly(ds, ds_variables)
+            RH_anomaly_df_dict = RH_storage(ds, ds_variables, rh_over100_ds, rh_negative_ds)
             
             # calculate dusk/dawn times and find occurrences of light at night (LAN) and no light at day (NLAD)
             LAN, NLAD, has_light = find_LAN_NLAD(ds, ds_variables)
@@ -165,7 +165,7 @@ def WRFstats(input_path, output_path, start, stop, descriptive=True, distributio
                       "IQR Outliers": iqr_outlier_df_dict,
                       "Z-Scores": zscore_ds,
                       "Z-Score Outliers": z_outlier_df_dict,
-                      "Rel Humidity Over 100%": RH_df_dict,
+                      "Rel Humidity Anomalies": RH_anomaly_df_dict,
                       "LAN/NLAD": LAN_NLAD_df_dict,
                       "Zeros": zeros_df_dict,
                       "Negatives": negatives_df_dict
