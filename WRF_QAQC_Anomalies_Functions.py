@@ -14,7 +14,7 @@ def has_sunlight(latitude: xr.DataArray, longitude: xr.DataArray, time: List[dat
     datetimes = [ts.to_pydatetime() for ts in timestamps]
     datetimes = [time.replace(tzinfo = timezone.utc) for time in datetimes if time.tzinfo is None]
     
-    dates = list({t.date() for t in datetimes})
+    dates = sorted(list({t.date() for t in datetimes}))
     frames = []
     
     def get_dawn(lat, lon, d):
