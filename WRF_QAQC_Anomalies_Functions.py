@@ -20,7 +20,8 @@ def has_sunlight(latitude: xr.DataArray, longitude: xr.DataArray, time: List[dat
     def get_dawn(lat, lon, d):
         
         try:
-            return dawn(LocationInfo(name = "", region = "", timezone = "UTC", latitude = lat, longitude = lon,).observer, date = d)
+            return dawn(LocationInfo(name = "", region = "", timezone = "UTC", latitude = lat, longitude = lon,
+                                     ).observer, date = d, depression = -2)
         
         except ValueError as e:
             # hack to fix precision errors for CONUS
@@ -29,7 +30,8 @@ def has_sunlight(latitude: xr.DataArray, longitude: xr.DataArray, time: List[dat
     def get_dusk(lat, lon, d):
         
         try:
-            return dusk(LocationInfo(name = "", region = "", timezone = "UTC", latitude = lat, longitude = lon,).observer, date = d)
+            return dusk(LocationInfo(name = "", region = "", timezone = "UTC", latitude = lat, longitude = lon,
+                                     ).observer, date = d, depression = -2)
         
         except ValueError as e:
             # hack to fix precision errors for CONUS
@@ -49,7 +51,6 @@ def has_sunlight(latitude: xr.DataArray, longitude: xr.DataArray, time: List[dat
                     lambda tdawn, tdusk, t: ((t <= tdusk) or (t >= tdawn)) if tdawn > tdusk else (tdawn <= t <= tdusk),
                     today_dawn, today_dusk, t, vectorize = True).values)
             
-    #return xr.DataArray(np.stack(frames, axis = 2), dims = ["lat", "lon", "time"])
     return xr.DataArray(np.stack(frames, axis=2).transpose((2, 0, 1)), dims=["time", "lat", "lon"])
 
 
@@ -123,7 +124,7 @@ def LAN_NLAD_storage(ds, ds_variables, LAN, NLAD, has_light):
         return LAN_NLAD_df_dict
 
 
-#%% find zeros 
+#%% find zeros where 0 should not occur
 def find_zeros(ds, ds_variables,
                checklist = ["T2", "PSFC", "RH"]):
     
@@ -171,7 +172,7 @@ def zeros_storage(ds, zeros_ds, vars):
     return zeros_df_dict
 
 
-#%% find negatives
+#%% find negatives where negative values should not occur
 def find_negatives(ds, ds_variables,
                checklist = ["LU_INDEX","T2","PSFC","SFROFF","UDROFF","ACSNOM","SNOW","SNOWH",
                              "RAINC","RAINSH","RAINNC","SNOWNC","GRAUPELNC","HAILNC","SWDOWN"]):
