@@ -434,9 +434,11 @@ def ZScore_Test(ds, ds_variables, z_threshold=3):
     z_outlier_lower_inv = ds[ds_variables].where(zscore_ds[ds_variables] < -z_threshold)
 
     z_outliers = xr.merge(
-        [zscore_ds, z_outlier_upper, z_outlier_lower, z_outlier_upper_inv, z_outlier_lower_inv, z_threshold], compat='override')
+        [zscore_ds, z_outlier_upper, z_outlier_lower, z_outlier_upper_inv, z_outlier_lower_inv, z_threshold],
+        compat='override')
 
     return z_outliers
+
 
 # %% function to find the previous month containing parts of the given month
 def previous_month(year_month):
@@ -569,4 +571,3 @@ stop = "2007-12"
 
 # run the WRFstats program
 WRFstats(input_path, output_path, start, stop)
-
