@@ -143,7 +143,7 @@ def WRFstats(input_path, output_path, start, stop, descriptive=True, distributio
         
         else:
             rh_over100_ds, LAN, NLAD, zeros_ds, negatives_ds = (None,)*5
-            RH_df_dict, LAN_NLAD_df_dict, zeros_df_dict, negatives_df_dict = (None,)*4
+            RH_anomaly_df_dict, LAN_NLAD_df_dict, zeros_df_dict, negatives_df_dict = (None,)*4
         
         # specify the location for the output of the program
         output_filename = os.path.join(output_path + f"WRFstats_{month}.npy")
