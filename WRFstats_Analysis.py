@@ -255,7 +255,7 @@ def WRFstats_Analysis(wrf_path, outlier_path, stats_path, output_path, start, st
             nc_files = sorted(glob(os.path.join(wrf_path, f"tgw_wrf_historical_hourly_{year}-{month}*")))
 
             try:
-                previousmonth = previous_month(month)
+                previousmonth = previous_month(f"{year}-{month}")
                 previousmonth_lastfile = sorted(glob(os.path.join(wrf_path, f"tgw_wrf_historical_hourly_{previousmonth}*")))[-1]
                 nc_files.insert(0, previousmonth_lastfile)
             except:
