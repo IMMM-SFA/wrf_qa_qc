@@ -265,8 +265,6 @@ def WRFstats_Analysis(wrf_path, outlier_path, stats_path, output_path, start, st
             ds["time"] = np.sort(ds["time"].values)
             ds = ds.sel(time = slice(dt64[i], dt64[i+1]))
 
-            #year = month[:month.find("-")]
-
             #outliers
             outlier_path = f"/global/cfs/projectdirs/m2702/gsharing/QAQC/historical/{year}/tgw_wrf_hourly_{year}-{month}_historical_all_outliers.nc"
             outliers = xr.open_dataset(outlier_path)
@@ -290,17 +288,17 @@ def WRFstats_Analysis(wrf_path, outlier_path, stats_path, output_path, start, st
 
             #iqr outliers
             iqr_outliers_df = outlier_dict_storage(ds, ds_variables, dt64, i, month, outliers,
-                                                    outlier_upper_type="upper_outliers", outlier_lower_type="lower_outliers",
-                                                    upper_threshold=stats, lower_threshold=stats,
-                                                    reshape=False
-                                                    )
+                                                   outlier_upper_type="upper_outliers", outlier_lower_type="lower_outliers",
+                                                   upper_threshold=stats, lower_threshold=stats,
+                                                   reshape=False
+                                                   )
 
             #z outliers
             z_outliers_df = outlier_dict_storage(ds, ds_variables, dt64, i, month, outliers,
-                                                  outlier_upper_type="z_outlier_upper", outlier_lower_type="z_outlier_lower",
-                                                  upper_threshold=4, lower_threshold=-4,
-                                                  reshape=True
-                                                  )
+                                                 outlier_upper_type="z_outlier_upper", outlier_lower_type="z_outlier_lower",
+                                                 upper_threshold=4, lower_threshold=-4,
+                                                 reshape=True
+                                                 )
 
             #has zero
             zero_outliers_df = outlier_dict_storage(ds, ["T2", "PSFC", "RH"], dt64, i, month, outliers,
@@ -319,10 +317,10 @@ def WRFstats_Analysis(wrf_path, outlier_path, stats_path, output_path, start, st
 
             #LAN
             LAN_outliers_df = outlier_dict_storage(ds, ["SWDOWN"], dt64, i, month, outliers,
-                                                    outlier_upper_type="LAN", outlier_lower_type=None,
-                                                    upper_threshold=None, lower_threshold=None,
-                                                    reshape=False
-                                                    )
+                                                   outlier_upper_type="LAN", outlier_lower_type=None,
+                                                   upper_threshold=None, lower_threshold=None,
+                                                   reshape=False
+                                                   )
 
             #NLAD
             NLAD_outliers_df = outlier_dict_storage(ds, ["SWDOWN"], dt64, i, month, outliers,
@@ -371,9 +369,3 @@ start = "1980-02"
 stop = "2020-01"
 
 outliers = WRFstats_Analysis(wrf_path, outlier_path, stats_path, output_path, start, stop)
-
-
-#%%
-#TODO function to count total outliers per time and location
-
-
