@@ -4,6 +4,7 @@ import xarray as xr
 import salem as sl
 from glob import glob
 import os
+from datetime import datetime, timedelta
 
 
 #%% find previous month to current
@@ -25,6 +26,16 @@ def previous_month(year_month):
     previousmonth = year_minus + "-" + month_minus
     
     return previousmonth
+
+
+#%% find next month to current
+def next_month(year_month):
+
+    currentdate = datetime.strptime(year_month, "%Y-%m")
+    nextmonth = currentdate + timedelta(days=31)
+    nextmonth_str = nextmonth.strftime("%Y-%m")
+
+    return nextmonth_str
 
 
 #%% function to convert T2 variable from K to F or C
@@ -245,108 +256,112 @@ def WRFstats_Analysis(wrf_path, outlier_path, stats_path, output_path, start, st
         
         outliers_list = []
         
-        year_months = [ month[month.find("-")+1:] for month in months[:-1] if month[:month.find("-")] == str(year) ]
+        year_months = [ month for month in months[:-1] if month[:month.find("-")] == str(year) ]
+        nextmonth = next_month(year_months[-1])
+        year_months.append(nextmonth)
+        dt64_year = [np.datetime64(y_m, "ns") for y_m in year_months]
         
         # iterate through each month and create dataset
         for i, month in enumerate(year_months):
-            
-            #open files
-            #historical datasets
-            nc_files = sorted(glob(os.path.join(wrf_path, f"tgw_wrf_historical_hourly_{year}-{month}*")))
+            if i < 12:
+                
+                #open files
+                #historical datasets
+                nc_files = sorted(glob(os.path.join(wrf_path, f"tgw_wrf_historical_hourly_{month}*")))
 
-            try:
-                previousmonth = previous_month(f"{year}-{month}")
-                previousmonth_lastfile = sorted(glob(os.path.join(wrf_path, f"tgw_wrf_historical_hourly_{previousmonth}*")))[-1]
-                nc_files.insert(0, previousmonth_lastfile)
-            except:
-                pass
+                try:
+                    previousmonth = previous_month(f"{month}")
+                    previousmonth_lastfile = sorted(glob(os.path.join(wrf_path, f"tgw_wrf_historical_hourly_{previousmonth}*")))[-1]
+                    nc_files.insert(0, previousmonth_lastfile)
+                except:
+                    pass
 
-            ds = sl.open_mf_wrf_dataset(nc_files)
-            ds["time"] = np.sort(ds["time"].values)
-            ds = ds.sel(time = slice(dt64[i], dt64[i+1]))
+                ds = sl.open_mf_wrf_dataset(nc_files)
+                ds["time"] = np.sort(ds["time"].values)
+                ds = ds.sel(time = slice(dt64_year[i], dt64_year[i+1]))
 
-            #outliers
-            outlier_path = f"/global/cfs/projectdirs/m2702/gsharing/QAQC/historical/{year}/tgw_wrf_hourly_{year}-{month}_historical_all_outliers.nc"
-            outliers = xr.open_dataset(outlier_path)
+                #outliers
+                outlier_path = f"/global/cfs/projectdirs/m2702/gsharing/QAQC/historical/{year}/tgw_wrf_hourly_{month}_historical_all_outliers.nc"
+                outliers = xr.open_dataset(outlier_path)
 
-            #stats/thresholds
-            stats_path = f"/global/cfs/projectdirs/m2702/gsharing/QAQC/historical/{year}/tgw_wrf_hourly_{year}-{month}_all_stats.nc"
-            stats = xr.open_dataset(stats_path)
+                #stats/thresholds
+                stats_path = f"/global/cfs/projectdirs/m2702/gsharing/QAQC/historical/{year}/tgw_wrf_hourly_{month}_all_stats.nc"
+                stats = xr.open_dataset(stats_path)
 
 
-            # convert T2 variable from K to F or C
-            temp_conv(ds, ds_variables)
+                # convert T2 variable from K to F or C
+                temp_conv(ds, ds_variables)
 
-            # combine and deaccumulate precipitation variables into PRECIP variable
-            deacc_precip(ds, ds_variables)
+                # combine and deaccumulate precipitation variables into PRECIP variable
+                deacc_precip(ds, ds_variables)
 
-            # create new variable WINDSPEED from magnitudes of velocity vectors
-            windspeed(ds, ds_variables)
+                # create new variable WINDSPEED from magnitudes of velocity vectors
+                windspeed(ds, ds_variables)
 
-            # calculate relative humidity and create new variable RH
-            rel_humidity(ds, ds_variables)
+                # calculate relative humidity and create new variable RH
+                rel_humidity(ds, ds_variables)
 
-            #iqr outliers
-            iqr_outliers_df = outlier_dict_storage(ds, ds_variables, dt64, i, month, outliers,
-                                                   outlier_upper_type="upper_outliers", outlier_lower_type="lower_outliers",
-                                                   upper_threshold=stats, lower_threshold=stats,
-                                                   reshape=False
-                                                   )
+                #iqr outliers
+                iqr_outliers_df = outlier_dict_storage(ds, ds_variables, dt64, i, month, outliers,
+                                                       outlier_upper_type="upper_outliers", outlier_lower_type="lower_outliers",
+                                                       upper_threshold=stats, lower_threshold=stats,
+                                                       reshape=False
+                                                       )
 
-            #z outliers
-            z_outliers_df = outlier_dict_storage(ds, ds_variables, dt64, i, month, outliers,
-                                                 outlier_upper_type="z_outlier_upper", outlier_lower_type="z_outlier_lower",
-                                                 upper_threshold=4, lower_threshold=-4,
-                                                 reshape=True
-                                                 )
+                #z outliers
+                z_outliers_df = outlier_dict_storage(ds, ds_variables, dt64, i, month, outliers,
+                                                     outlier_upper_type="z_outlier_upper", outlier_lower_type="z_outlier_lower",
+                                                     upper_threshold=4, lower_threshold=-4,
+                                                     reshape=True
+                                                     )
 
-            #has zero
-            zero_outliers_df = outlier_dict_storage(ds, ["T2", "PSFC", "RH"], dt64, i, month, outliers,
-                                                    outlier_upper_type="has_zero", outlier_lower_type=None,
-                                                    upper_threshold=None, lower_threshold=None,
-                                                    reshape=False
-                                                    )
-
-            #has negative
-            ds_vars = ["LU_INDEX","T2","PSFC","SFROFF","UDROFF","ACSNOM","SNOW","SNOWH","RAINC","RAINSH","RAINNC","SNOWNC","GRAUPELNC","HAILNC","SWDOWN"]
-            negative_outliers_df = outlier_dict_storage(ds, ds_vars, dt64, i, month, outliers,
-                                                        outlier_upper_type="has_negative", outlier_lower_type=None,
+                #has zero
+                zero_outliers_df = outlier_dict_storage(ds, ["T2", "PSFC", "RH"], dt64, i, month, outliers,
+                                                        outlier_upper_type="has_zero", outlier_lower_type=None,
                                                         upper_threshold=None, lower_threshold=None,
                                                         reshape=False
                                                         )
 
-            #LAN
-            LAN_outliers_df = outlier_dict_storage(ds, ["SWDOWN"], dt64, i, month, outliers,
-                                                   outlier_upper_type="LAN", outlier_lower_type=None,
-                                                   upper_threshold=None, lower_threshold=None,
-                                                   reshape=False
-                                                   )
+                #has negative
+                ds_vars = ["LU_INDEX","T2","PSFC","SFROFF","UDROFF","ACSNOM","SNOW","SNOWH","RAINC","RAINSH","RAINNC","SNOWNC","GRAUPELNC","HAILNC","SWDOWN"]
+                negative_outliers_df = outlier_dict_storage(ds, ds_vars, dt64, i, month, outliers,
+                                                            outlier_upper_type="has_negative", outlier_lower_type=None,
+                                                            upper_threshold=None, lower_threshold=None,
+                                                            reshape=False
+                                                            )
 
-            #NLAD
-            NLAD_outliers_df = outlier_dict_storage(ds, ["SWDOWN"], dt64, i, month, outliers,
-                                                    outlier_upper_type="NLAD", outlier_lower_type=None,
-                                                    upper_threshold=None, lower_threshold=None,
-                                                    reshape=False
-                                                    )
+                #LAN
+                LAN_outliers_df = outlier_dict_storage(ds, ["SWDOWN"], dt64, i, month, outliers,
+                                                       outlier_upper_type="LAN", outlier_lower_type=None,
+                                                       upper_threshold=None, lower_threshold=None,
+                                                       reshape=False
+                                                       )
 
-            #RH_over100 & RH_neg
-            RH_outliers_df = outlier_dict_storage(ds, ["RH"], dt64, i, month, outliers,
-                                                  outlier_upper_type="over100", outlier_lower_type="neg",
-                                                  upper_threshold=None, lower_threshold=None,
-                                                  reshape=False
-                                                  )
+                #NLAD
+                NLAD_outliers_df = outlier_dict_storage(ds, ["SWDOWN"], dt64, i, month, outliers,
+                                                        outlier_upper_type="NLAD", outlier_lower_type=None,
+                                                        upper_threshold=None, lower_threshold=None,
+                                                        reshape=False
+                                                        )
 
-            outliers_dict = {
-                              "IQR": iqr_outliers_df,
-                              "ZScore": z_outliers_df,
-                              "Zeros": zero_outliers_df,
-                              "Negatives": negative_outliers_df,
-                              "LAN": LAN_outliers_df,
-                              "NLAD": NLAD_outliers_df,
-                              "Rel. Humidity": RH_outliers_df
-                              }
+                #RH_over100 & RH_neg
+                RH_outliers_df = outlier_dict_storage(ds, ["RH"], dt64, i, month, outliers,
+                                                      outlier_upper_type="over100", outlier_lower_type="neg",
+                                                      upper_threshold=None, lower_threshold=None,
+                                                      reshape=False
+                                                      )
 
-            outliers_list.append(outliers_dict)
+                outliers_dict = {
+                                  "IQR": iqr_outliers_df,
+                                  "ZScore": z_outliers_df,
+                                  "Zeros": zero_outliers_df,
+                                  "Negatives": negative_outliers_df,
+                                  "LAN": LAN_outliers_df,
+                                  "NLAD": NLAD_outliers_df,
+                                  "Rel. Humidity": RH_outliers_df
+                                  }
+
+                outliers_list.append(outliers_dict)
             
 
         output_filename = os.path.join(output_path + f"WRFstats_Analysis_{year}.npy")
