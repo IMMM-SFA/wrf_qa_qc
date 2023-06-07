@@ -223,7 +223,7 @@ def outlier_dict_storage(ds, ds_variables, dt64_year, i, outliers,
 
 
 #%% month loop
-def WRFstats_Analysis(wrf_path, outlier_path, stats_path, output_path, start, stop, 
+def WRFstats_Analysis(wrf_path, output_path, start, stop, data_set,
                       ds_variables=["LU_INDEX","Q2","T2","PSFC","U10","V10","SFROFF","UDROFF","ACSNOM","SNOW","SNOWH","WSPD","BR",
                                     "ZOL","RAINC","RAINSH","RAINNC","SNOWNC","GRAUPELNC","HAILNC","SWDOWN","GLW","UST","SNOWC","SR"]
                       ):
@@ -264,13 +264,22 @@ def WRFstats_Analysis(wrf_path, outlier_path, stats_path, output_path, start, st
         for i, month in enumerate(year_months):
             if i < 12:
                 
+                #remove underscore if necessary
+                udx = data_set.find("_")
+                if udx>0:
+                    first = data_set[:udx]
+                    second = data_set[udx+1:]
+                    dataset = first + second
+                else:
+                    dataset=data_set
+                
                 #open files
                 #historical datasets
-                nc_files = sorted(glob(os.path.join(wrf_path, f"tgw_wrf_historical_hourly_{month}*")))
+                nc_files = sorted(glob(os.path.join(wrf_path, f"tgw_wrf_{dataset}_hourly_{month}*")))
 
                 try:
                     previousmonth = previous_month(month)
-                    previousmonth_lastfile = sorted(glob(os.path.join(wrf_path, f"tgw_wrf_historical_hourly_{previousmonth}*")))[-1]
+                    previousmonth_lastfile = sorted(glob(os.path.join(wrf_path, f"tgw_wrf_{dataset}_hourly_{previousmonth}*")))[-1]
                     nc_files.insert(0, previousmonth_lastfile)
                 except:
                     pass
@@ -280,11 +289,11 @@ def WRFstats_Analysis(wrf_path, outlier_path, stats_path, output_path, start, st
                 ds = ds.sel(time = slice(dt64_year[i], dt64_year[i+1]))
                 
                 #outliers
-                outlier_path = f"/global/cfs/projectdirs/m2702/gsharing/QAQC/historical/{year}/tgw_wrf_hourly_{month}_historical_all_outliers.nc"
+                outlier_path = f"/global/cfs/projectdirs/m2702/gsharing/QAQC/{data_set}/{year}/tgw_wrf_hourly_{month}_{dataset}_all_outliers.nc"
                 outliers = xr.open_dataset(outlier_path)
 
                 #stats/thresholds
-                stats_path = f"/global/cfs/projectdirs/m2702/gsharing/QAQC/historical/{year}/tgw_wrf_hourly_{month}_all_stats.nc"
+                stats_path = f"/global/cfs/projectdirs/m2702/gsharing/QAQC/{data_set}/{year}/tgw_wrf_hourly_{month}_{dataset}_all_stats.nc"
                 stats = xr.open_dataset(stats_path)
 
 
@@ -301,50 +310,53 @@ def WRFstats_Analysis(wrf_path, outlier_path, stats_path, output_path, start, st
                 rel_humidity(ds, ds_variables)
 
                 #iqr outliers
-                iqr_outliers_df = outlier_dict_storage(ds, ds_variables, dt64_year, i, outliers,
+                dsvars=["LU_INDEX","Q2","T2","PSFC","U10","V10","SFROFF","UDROFF","WSPD",
+                        "ZOL","RAINSH","HAILNC","SWDOWN","GLW","UST","SR"]
+                iqr_outliers_df = outlier_dict_storage(ds, dsvars, dt64_year, i, month, outliers,
                                                        outlier_upper_type="upper_outliers", outlier_lower_type="lower_outliers",
                                                        upper_threshold=stats, lower_threshold=stats,
                                                        reshape=False
                                                        )
 
                 #z outliers
-                z_outliers_df = outlier_dict_storage(ds, ds_variables, dt64_year, i, outliers,
+                z_outliers_df = outlier_dict_storage(ds, dsvars, dt64_year, i, month, outliers,
                                                      outlier_upper_type="z_outlier_upper", outlier_lower_type="z_outlier_lower",
                                                      upper_threshold=4, lower_threshold=-4,
                                                      reshape=True
                                                      )
 
                 #has zero
-                zero_outliers_df = outlier_dict_storage(ds, ["T2", "PSFC", "RH"], dt64_year, i,  outliers,
+                zero_outliers_df = outlier_dict_storage(ds, ["T2", "PSFC", "RH"], dt64_year, i, month, outliers,
                                                         outlier_upper_type="has_zero", outlier_lower_type=None,
                                                         upper_threshold=None, lower_threshold=None,
                                                         reshape=False
                                                         )
 
                 #has negative
-                ds_vars = ["LU_INDEX","T2","PSFC","SFROFF","UDROFF","ACSNOM","SNOW","SNOWH","RAINC","RAINSH","RAINNC","SNOWNC","GRAUPELNC","HAILNC","SWDOWN"]
-                negative_outliers_df = outlier_dict_storage(ds, ds_vars, dt64_year, i, outliers,
+                ds_vars = ["LU_INDEX","T2","PSFC","SFROFF","UDROFF","ACSNOM","SNOW","SNOWH","RAINC","RAINSH",
+                           "RAINNC","SNOWNC","GRAUPELNC","HAILNC","SWDOWN"]
+                negative_outliers_df = outlier_dict_storage(ds, ds_vars, dt64_year, i, month, outliers,
                                                             outlier_upper_type="has_negative", outlier_lower_type=None,
                                                             upper_threshold=None, lower_threshold=None,
                                                             reshape=False
                                                             )
 
                 #LAN
-                LAN_outliers_df = outlier_dict_storage(ds, ["SWDOWN"], dt64_year, i, outliers,
+                LAN_outliers_df = outlier_dict_storage(ds, ["SWDOWN"], dt64_year, i, month, outliers,
                                                        outlier_upper_type="LAN", outlier_lower_type=None,
                                                        upper_threshold=None, lower_threshold=None,
                                                        reshape=False
                                                        )
 
                 #NLAD
-                NLAD_outliers_df = outlier_dict_storage(ds, ["SWDOWN"], dt64_year, i, outliers,
+                NLAD_outliers_df = outlier_dict_storage(ds, ["SWDOWN"], dt64_year, i, month, outliers,
                                                         outlier_upper_type="NLAD", outlier_lower_type=None,
                                                         upper_threshold=None, lower_threshold=None,
                                                         reshape=False
                                                         )
 
                 #RH_over100 & RH_neg
-                RH_outliers_df = outlier_dict_storage(ds, ["RH"], dt64_year, i, outliers,
+                RH_outliers_df = outlier_dict_storage(ds, ["RH"], dt64_year, i, month, outliers,
                                                       outlier_upper_type="over100", outlier_lower_type="neg",
                                                       upper_threshold=None, lower_threshold=None,
                                                       reshape=False
@@ -363,7 +375,7 @@ def WRFstats_Analysis(wrf_path, outlier_path, stats_path, output_path, start, st
                 outliers_list.append(outliers_dict)
                 
                 
-        output_filename = os.path.join(output_path + f"WRFstats_Analysis_{year}.npy")
+        output_filename = os.path.join(output_path + f"WRFstats_Analysis_{dataset}_{year}.npy")
         np.save(output_filename, outliers_list)
         
     
@@ -381,4 +393,4 @@ output_path = "/global/cfs/projectdirs/m2702/gsharing/QAQC/analysis/"
 start = "1980-01"
 stop = "2020-01"
 
-WRFstats_Analysis(wrf_path, outlier_path, stats_path, output_path, start, stop)
+WRFstats_Analysis(wrf_path, output_path, start, stop, data_set="historical")
