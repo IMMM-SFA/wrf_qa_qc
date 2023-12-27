@@ -43,6 +43,7 @@ def iqr_test(ds: xr.Dataset, ds_variables: List[str], iqr_threshold: int = 3) ->
 
     Missing or NaN values are skipped when calculating percentiles and thresholds.
     """
+    
     q75_ds = ds[ds_variables].quantile(q=0.75, dim="time", skipna="True").astype("float32")
     q25_ds = ds[ds_variables].quantile(q=0.25, dim="time", skipna="True").astype("float32")
 
@@ -235,7 +236,7 @@ def has_sunlight(latitude: xr.DataArray, longitude: xr.DataArray, time: List[dat
     return xr.DataArray(np.stack(frames, axis=2).transpose((2, 0, 1)), dims=["time", "lat", "lon"])
 
 
-def find_lan_nlad(ds: xr.Dataset, ds_variables: list) -> Tuple[xr.DataArray, xr.DataArray, xr.DataArray]:
+def find_lan_nlad(ds: xr.Dataset, ds_variables: list, lan_threshold=50) -> Tuple[xr.DataArray, xr.DataArray, xr.DataArray]:
     """
     Find locations with light at night (LAN) and no light at day (NLAD) in a given dataset.
 
@@ -258,7 +259,8 @@ def find_lan_nlad(ds: xr.Dataset, ds_variables: list) -> Tuple[xr.DataArray, xr.
 
         has_light = has_sunlight(ds.lat, ds.lon, ds.time.values)
 
-        lan = ds["SWDOWN"].where(has_light.values == False).where(ds["SWDOWN"] >= 50)
+        # check for any irradiance values over lan threshold, or any 0 values during day
+        lan = ds["SWDOWN"].where(has_light.values == False).where(ds["SWDOWN"] >= lan_threshold)
         nlad = ds["SWDOWN"].where(has_light.values == True).where(ds["SWDOWN"] == 0)
         lan_xr = xr.Dataset().assign(SWDOWN_LAN=lan)
         nlad_xr = xr.Dataset().assign(SWDOWN_NLAD=nlad)
