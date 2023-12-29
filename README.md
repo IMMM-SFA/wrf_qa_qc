@@ -6,4 +6,4 @@ Repository for the Weather Research and Forecasting Model (WRF) QA/QC process wi
 * `filter_outliers_nan.py`, and `run_filter_outliers.py` removes the padded nans from the "*all_outliers.nc" files
 
 # MetaRepo
-[Martell et al. (2024) Geoscientific Model Development](https://github.com/mxjmartell/Martell-etal_2023_NatureScientificData "Martell et al. (2024)")
+[Martell et al. (2024) Geoscientific Model Development](https://mxjmartell.github.io/Martell-etal_2024_GeoscientificModelDevelopment/ "Martell et al. (2024)")
