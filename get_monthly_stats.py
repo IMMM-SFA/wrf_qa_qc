@@ -169,8 +169,8 @@ def wrf_stats(input_path: str, output_path: str, start: str, stop: str,
             os.makedirs(year_path)
 
         # specify the location for the output of the program
-        stats_output_filename = os.path.join(year_path + "/" + f"tgw_wrf_hourly_{month}_all_stats.nc")
-        outlier_output_filename = os.path.join(year_path + "/" + f"tgw_wrf_hourly_{month}_all_outliers.nc")
+        stats_output_filename = os.path.join(year_path + f"tgw_wrf_hourly_{month}_all_stats.nc")
+        outlier_output_filename = os.path.join(year_path + f"tgw_wrf_hourly_{month}_all_outliers.nc")
 
         # save each output stat as a netCDF file
         stats_combined.to_netcdf(path=stats_output_filename)
